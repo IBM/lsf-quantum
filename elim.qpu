@@ -1,0 +1,379 @@
+#!/usr/bin/env python3  
+
+# -*- coding: utf-8 -*-
+
+#
+# (C) Copyright 2025 IBM. All Rights Reserved.
+#
+# This code is licensed under the Apache License, Version 2.0. You may
+# obtain a copy of this license in the LICENSE.txt file in the root directory
+# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+#
+# Any modifications or derivative works of this code must retain this
+# copyright notice, and modified files need to carry a notice indicating
+# that they have been altered from the originals.
+
+import sys
+import os
+import time
+import json
+import argparse
+import requests
+import subprocess
+import socket 
+import re
+import time
+import statistics
+from dotenv import dotenv_values
+from dotenv import load_dotenv
+from pathlib import Path
+from operator import itemgetter
+
+def print_debug(message, var=None):
+    """
+    Print a debug message to stderr 
+    """
+    if debug:
+        message = "[DEBUG] " + message
+        if var:
+            message = message + " {}"
+            print(message.format(var), file=sys.stderr)
+        else:   
+            print(message, file=sys.stderr)
+
+def print_error(message):
+    """
+    Print a error message to stderr 
+    """
+    message = "[ERROR] " + message
+    print(message, file=sys.stderr)
+    exit(1)
+
+def gen_bearer_token(api_key):
+    """
+    Generate an IAM bearer token (valid for 3600 sec.)
+    """
+    url = "https://iam.cloud.ibm.com/identity/token"
+    payload = {
+        "grant_type": "urn:ibm:params:oauth:grant-type:apikey",
+        "apikey": api_key
+    }
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept": "application/json"
+    }
+
+    try:
+        response = requests.post(url, data=payload, headers=headers)
+        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+        data = response.json()
+        bearer_token = data["access_token"]
+        #print(f"Bearer token: {bearer_token}")
+        return bearer_token
+
+    except requests.exceptions.RequestException as e:
+        print(f"An error occurred: {e}", file=sys.stderr)
+        if hasattr(e, 'response') and e.response:
+            print(f"Response status code: {e.response.status_code}", file=sys.stderr)
+            print(f"Response content: {e.response.text}", file=sys.stderr)
+        return None
+
+
+def get_device_topology(token, device, request_type):
+    """
+    Query IBM Quantum Cloud API for a single backend specified by myqpu.
+    """
+    backend_name = device 
+
+    # Build the URL for the specific backend and request type
+    url = f"https://quantum.cloud.ibm.com/api/v1/backends/{backend_name}/{request_type}"
+    headers = {
+        "Service-CRN": crn,  # Must be a string CRN, not a dict
+        "accept": "application/json",
+        "Authorization": f"Bearer {token}"
+    }
+
+    try:
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()  # Raise HTTPError for bad responses
+        topo = response.json()
+        topo["device"] = backend_name
+        return topo
+
+    except requests.exceptions.RequestException as e:
+        print(f"An error occurred: {e}", file=sys.stderr)
+        if hasattr(e, 'response') and e.response:
+            print(f"Response status code: {e.response.status_code}", file=sys.stderr)
+            print(f"Response content: {e.response.text}", file=sys.stderr)
+        return None
+
+def read_env_vars_from_config():
+    """    
+    Read CRN and API key from $LSF_ENVDIR/env.qpu 
+    """ 
+    lsf_envdir = os.environ.get("LSF_ENVDIR")
+
+    env_qpu_path = Path(lsf_envdir) / "env.qpu"
+     
+    
+    if os.path.exists(env_qpu_path):
+        print_debug("Found: ", env_qpu_path)
+    else:
+        print_error("File qpu.env does not exist in $LSF_ENVDIR")
+
+
+    load_dotenv(dotenv_path=env_qpu_path) 
+
+    # Only need API and CRN ...
+
+    api_key = os.environ.get("APIKEY")
+    if not api_key:
+        print_error("No APIKEY provided")     
+
+    token = gen_bearer_token(api_key)
+    if not token:
+       print_error("No IAM bearer token provided.")
+
+    crn = os.environ.get("CRN")
+    if not crn:
+       print_error("No CRN provided")     
+
+    return token, crn 
+
+
+def get_system_config(device_config):
+    """
+    Get quantum system configuration.
+    """
+
+    n_qubits=device_config.get("n_qubits") 
+    clops_h=device_config.get("clops_h")
+    backend_version=device_config.get("backend_version")
+
+    print_debug("qubits", device_config.get("n_qubits"))
+    print_debug("clops", device_config.get("clops_h"))
+    print_debug("qpu_version", device_config.get("backend_version"))
+    
+    basis_gates = device_config.get("basis_gates", [])
+    basis_gates_str = "_".join(map(str, basis_gates))
+
+    print_debug("basis_gates", basis_gates_str)
+
+    # Parse sample_name to extract Quantum processor family and revision
+    sample_name = device_config.get("sample_name", "")
+    try:
+        parts = [p.strip() for p in sample_name.split(",")]
+        family = parts[0].split(":")[1].strip()
+        revision = parts[1].split(":")[1].strip()
+        processor_type = f"{family}_r{revision}"
+    except (IndexError, ValueError):
+        processor_type = "Unknown"
+
+    print_debug("processor_type", processor_type)
+
+    return {
+        "qubits": n_qubits,
+        "clops": clops_h,
+        "qpu_version": backend_version,
+        "basis_gates": basis_gates_str,
+        "processor_type": processor_type,
+    }
+
+def get_system_medians(device_properties):
+    """
+    Compute and print global medians across the system for:
+      - readout_error (scientific notation, 2 decimals)
+      - T1 (µs, 2 decimals; unit-normalized)
+      - T2 (µs, 2 decimals; unit-normalized)
+      - sx gate_error (scientific notation, 2 decimals)
+      - cz gate_error (scientific notation, 3 decimals)
+
+    Parameters
+    ----------
+    device_properties : dict
+        Expected keys:
+          - "qubits": list of lists of parameter dicts:
+              {"name": "T1"/"T2"/"readout_error", "unit": "...", "value": <number>}
+          - "gates": list of gate dicts:
+              {"gate": "sx"/"cz", "parameters": [{"name": "gate_error", "value": <number>}, ...], ...}
+
+    Returns
+    -------
+    dict
+        {
+            "readout_error_median": float|None,
+            "T1_median_us": float|None,
+            "T2_median_us": float|None,
+            "sx_error_median": float|None,
+            "cz_error_median": float|None,
+        }
+    """
+
+    # --- Qubit-level properties ---
+    readout_errors = []
+    t1_values_us = []
+    t2_values_us = []
+
+    qubits = device_properties.get("qubits", [])
+    if isinstance(qubits, list):
+        for qubit in qubits:
+            if not isinstance(qubit, list):
+                continue
+            for param in qubit:
+                if not isinstance(param, dict):
+                    continue
+
+                name = param.get("name")
+                unit = str(param.get("unit", "")).lower()
+                val = param.get("value")
+
+                if not isinstance(val, (int, float)):
+                    continue
+
+                # Names: T1/T2 uppercase; readout_error lowercase as per properties API output.  
+                if name == "readout_error":
+                    readout_errors.append(float(val))
+                elif name == "T1":
+                    t1_values_us.append(float(val))
+                elif name == "T2":
+                    t2_values_us.append(float(val))
+
+    # --- Gate-level errors (global across system) ---
+    sx_errors = []
+    cz_errors = []
+
+    for gate in device_properties.get("gates", []):
+        if not isinstance(gate, dict):
+            continue
+        gate_type = str(gate.get("gate", "")).lower()
+        # find the gate_error parameter value
+        err = next(
+            (p.get("value") for p in gate.get("parameters", [])
+             if isinstance(p, dict) and str(p.get("name", "")).lower() == "gate_error"),
+            None
+        )
+        if err is None or not isinstance(err, (int, float)):
+            continue
+
+        if gate_type == "sx":
+            sx_errors.append(float(err))
+        elif gate_type == "cz":
+            cz_errors.append(float(err))
+
+    # --- Compute medians (raw numeric values) ---
+    readout_median = statistics.median(readout_errors) if readout_errors else None
+    t1_median_us = statistics.median(t1_values_us) if t1_values_us else None
+    t2_median_us = statistics.median(t2_values_us) if t2_values_us else None
+    sx_median = statistics.median(sx_errors) if sx_errors else None
+    cz_median = statistics.median(cz_errors) if cz_errors else None
+
+    return {
+        "readout_error_median": readout_median,
+        "T1_median_us": t1_median_us,
+        "T2_median_us": t2_median_us,
+        "sx_error_median": sx_median,
+        "cz_error_median": cz_median,
+    }
+
+
+#-----------------------------------------------------
+# Main starts here
+#-----------------------------------------------------
+debug = os.getenv('LSF_ELIM_DEBUG')
+if debug != 'level1' and debug != 'level2':
+   debug = None
+
+# LSF elim sleep time 
+sleep_time = 10  
+
+# IAM token cache time
+token_cache_time = 3500
+
+# Get the hostname
+hostname = socket.gethostname()
+
+pipeline = f"lshosts -o RESOURCES {hostname} | grep -v RESOURCES | sed 's/(//' | sed 's/)//'"
+result = subprocess.run(pipeline, shell=True, capture_output=True, text=True)
+
+if result.returncode != 0:
+   print_error("Error: {result.stderr}")
+else:
+   # Clean and split the output
+   cleaned = result.stdout.strip()
+   tokens = re.split(r"[,\s;]+", cleaned)  # split on spaces, commas, semicolons
+
+# Find the first resource starting with 'ibm_'
+ibm_resource = next((t for t in tokens if t.startswith("ibm_")), None)
+
+if ibm_resource:
+   print_debug(f"My QPU = {ibm_resource}")
+else:
+   print_error("No resource starting with 'ibm_' found.")
+
+device = str(ibm_resource) 
+if not device:
+   print_error("No quantum devices found.")
+
+# Read environment variables from $LSF_ENVDIR/env.qpu and generate IAM bearer token
+token, crn = read_env_vars_from_config()
+# Start token cache timer
+token_cache_start_time = time.time()
+
+while True:
+
+    elim_output = ""
+
+    time_current = time.time()
+    # If exceeded cache time, get a new token
+    time_delta = time_current - token_cache_start_time
+    if ( time_delta > token_cache_time): 
+        token, crn = read_env_vars_from_config()
+        token_cache_start_time = time_current
+        print_debug("Updated IAM token")
+
+    device_config = get_device_topology(token, device, "configuration")
+    if not device_config:
+        print_error("No configuration of quantum device.")
+        break 
+    else: 
+        configuration = get_system_config(device_config)
+
+        # Build elim output string
+        elim_output += "10 "
+        elim_output += f"qubits {configuration['qubits']} "
+        elim_output += f"clops {configuration['clops']} "
+        elim_output += f"qpu_version {configuration['qpu_version']} "
+        elim_output += f"processor_type {configuration['processor_type']} "
+
+        # Get status of quantum device.
+        device_status = get_device_topology(token, device, "status")
+        if not device_status:
+            print_error("No status of quantum device.")
+        else: 
+            # Continue building elim output string 
+            elim_output += f"pending_jobs {device_status['length_queue']} " 
+
+    device_properties = get_device_topology(token, device, "properties")
+    if not device_properties:
+        print_error("No properties of quantum device.")
+        break
+    else: 
+        properties = get_system_medians(device_properties)
+
+        readout_value = properties['readout_error_median']
+        elim_output += f"readout_error_median {format(readout_value, '.1e').replace('e-0', 'e-').replace('e+0', 'e+')} "
+
+        sx_value = properties['sx_error_median']
+        elim_output += f"sx_error_median {format(sx_value, '.1e').replace('e-0', 'e-').replace('e+0', 'e+')} "
+
+        cz_value = properties['cz_error_median']
+        elim_output += f"cz_error_median {format(cz_value, '.1e').replace('e-0', 'e-').replace('e+0', 'e+')} "
+
+        elim_output += f"T1_median_µs {properties['T1_median_us']:.2f} "
+        elim_output += f"T2_median_µs {properties['T2_median_us']:.2f} "
+
+    print(elim_output, flush=True) 
+    time.sleep(sleep_time)
+
+exit(0)
+
