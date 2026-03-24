@@ -1,27 +1,27 @@
 # Quantum workloads with IBM LSF
 
 ## Introduction
-One of the key elements of the ![Quantum Centric Supercomputing](https://www.ibm.com/think/topics/quantum-centric-supercomputing) paradigm is a unified management of workloads and workflows on the integrated
-quantum computing and high performace compting infrastrtucture. The latter requires development of the corresponding middleware stack, which includes workload and workflow managers.
+One of the key elements of the [Quantum Centric Supercomputing](https://www.ibm.com/think/topics/quantum-centric-supercomputing) paradigm is a unified management of workloads and workflows on the integrated
+quantum computing and high-performance computing infrastructure. The latter requires development of the corresponding middleware stack, which includes workload and workflow managers.
 
-This repository contains implementation of plugins for IBM LSF workload manager for handling jobs using ![Quantum Resource Management Interface (QRMI)](https://github.com/qiskit-community/qrmi/tree/main), a vendor agnostic library providing a set of APIs to facilitate deployment of workloads on quantum processing units (QPUs).
+This repository contains implementation of plugins for IBM LSF workload manager for handling jobs using [Quantum Resource Management Interface (QRMI)](https://github.com/qiskit-community/qrmi/tree/main), a vendor agnostic library providing a set of APIs to facilitate deployment of workloads on quantum processing units (QPUs).
 
 ## Overview
-Figure 1 depicts workflow of LSF job submission with `esub.qrmi`. The latter uses QRMI template variable from user defined `.env` file and user requirements
-to find the best suitable quantum device. Selection algorithm works as follows:
-1. Get number of qbits and name of the env. file.
+Figure 1 depicts the workflow of LSF job submission with `esub.qrmi`. The latter uses the QRMI template variable from user defined `.env` file and the user requirements
+to find the best suitable quantum device. The selection algorithm works as follows:
+1. Get the number of qubits and the name of the env. file.
 2. Get available quantum devices from IBM Quantum Platform.
 3. Get topology details for each quantum device.
-4. Select device that is best suited for job requirements. 
-5. Create device specific QRMI environment variables and appends them to a job metadata.
+4. Select the device that is best suited for the job requirements. 
+5. Create device-specific QRMI environment variables and append them to the job metadata.
 
 <img width="1317" alt="Screenshot 2025-07-05 at 08 08 13" src="https://github.ibm.com/Vadim-V-Elisseev/qc-hpc-topology/assets/79310/93a5937a-0d57-4c71-9c94-20c0cacccd89">
 
 
 
 ## Prerequisites
-- Working ![IBM Spectrum LSF Suites](https://www.ibm.com/products/hpc-workload-management)  or ![LSF-CE](https://www.ibm.com/docs/en/cloud-private/3.2.x?topic=paks-spectrum-lsf-community-edition) cluster.
-- Account on ![IBM Quantum Platform](https://quantum.ibm.com/) with generated API key and a CRN number.
+- Working [IBM Spectrum LSF Suites](https://www.ibm.com/products/hpc-workload-management)  or [LSF-CE](https://www.ibm.com/docs/en/cloud-private/3.2.x?topic=paks-spectrum-lsf-community-edition) cluster.
+- Account on [IBM Quantum Platform](https://quantum.ibm.com/) with generated API key and a CRN number.
 
 ## Deploying esub and jobstarter
 Install dependencies, assuming that Python 3.11 (or later) is already available.
@@ -44,7 +44,7 @@ JOB_STARTER = /opt/lsf/10.1/linux3.10-glibc2.17-x86_64/etc/jobstarter.qrmi
 ```
 
 ## Using esub.qrmi
-`esub.qrmi` requires file name as a positional argument and either quantum device or number of qubits as options.
+`esub.qrmi` requires a file name as a positional argument and either a quantum device or a number of qubits as options.
 
 ```
 $ ./esub.qrmi
@@ -73,7 +73,7 @@ examples:
 note: export LSF_ESUB_QRMI_DEBUG=level1 enables debugging messages
       export LSF_ESUB_QRMI_DEBUG=level2 enables level1 and more 
 ```
-Before submitting any jobs prepare an file with template QRMI variables in your $CWD. Refer to ![IBM Quantum Platform documentation](https://quantum.cloud.ibm.com/docs/en/guides/cloud-setup) on how to cerate API key and CRN.
+Before submitting any jobs, prepare a file with template QRMI variables in your $CWD. Refer to [IBM Quantum Platform documentation](https://quantum.cloud.ibm.com/docs/en/guides/cloud-setup) on how to create an API key and CRN.
 ```
 $ cat .env
 QRMI_IBM_QRS_IAM_APIKEY=<user_api_key>
@@ -84,11 +84,11 @@ QRMI_IBM_QRS_SESSION_MODE="batch"
 ```
 **Note: esub.qrm expects a short file name for QRMI templates and assumes that it is in $CWD.**
 
-To verify your setup submit an interactive job asking for some qbits, for example
+To verify your setup, submit an interactive job asking for some qubits, for example
 ```
 bsub -Is -a "qrmi(".env", 128)" /bin/bash
 ```
-Once the job is dispatched check for QRMI environment variables, for example
+Once the job is dispatched, check for QRMI environment variables, for example
 ```
 $ env |grep QRMI
 ibm_kingston_QRMI_IBM_QRS_IAM_APIKEY=<user_api_key>
@@ -98,26 +98,26 @@ ibm_kingston_QRMI_IBM_QRS_SESSION_MODE=batch
 ibm_kingston_QRMI_IBM_QRS_IAM_ENDPOINT=https://iam.cloud.ibm.com
 QRMI_IBM_QRS_BEST_DEVICE=ibm_kingston
 ```
-**Note: QRMI_IBM_QRS_BEST_DEVICE is not usedby QRMI and is provided for conveniency.**
+**Note: QRMI_IBM_QRS_BEST_DEVICE is not used by QRMI and is provided for convenience.**
 
 Now you can submit a QRMI-enabled workload:
 ```
 bsub -Is -a "qrmi(".env", 128)" run_example.sh
 ```
-Alternatevly, if you want to use a particular quantum device:
+Alternatively, if you want to use a particular quantum device:
 ```
 bsub -Is -a "qrmi(".env", ibm_sherbrook)" run_example.sh
 ```
-**Note: when device name is explicilty asked for, it is taken at face value and no checks for the device availabilty are made.**
+**Note: when the device name is explicitly asked for, it is taken at face value, and no checks for the device availability are made.**
 
 ## LSF ELIM for IBM Quantum Platform
 
-This **LSF ELIM (External Load Information Manager)** to report available IBM Quantum systems (QPUS), their respective properties, as well as pending workloads as **load indices** in IBM Spectrum LSF. These indices, can help LSF to make better job placement and throttling decisions for workloads that target QPUs. It relies upon the IBM Qiskit REST API to retrieve information. 
+This **LSF ELIM (External Load Information Manager)** reports available IBM Quantum systems (QPUS), their respective properties, as well as pending workloads as **load indices** in IBM Spectrum LSF. These indices can help LSF to make better job placement and throttling decisions for workloads that target QPUs. It relies upon the IBM Qiskit REST API to retrieve information. 
 
 ## Overview
 
 IBM Spectrum LSF uses **LIM (Load Information Manager)** to collect host metrics. **ELIM** is a plugin/executable that LIM invokes to fetch **custom load indices**. 
-This ELIM is used to query the IBM Quantum Platform for information on QPUs including queue length and health, and provides this information to LSF for scheduling decisions. 
+This ELIM is used to query the IBM Quantum Platform for information on QPUs, including queue length and health, and provides this information to LSF for scheduling decisions. 
 
 | Metric    | Description |
 | -------- | ------- |
@@ -222,14 +222,14 @@ Before running LSF Elim, you need to map the classical system to the quantum sys
 $ pip install qiskit requests
 ```
 
-<li>As the LSF Administrator user, copy elim.qpu to correct directory and set the execute permissions.</li>
+<li>As the LSF Administrator user, copy elim.qpu to the correct directory and set the execute permissions.</li>
 
 ```bash
 cp elim.qpu $LSF_SERVERDIR 
 chmod 755 $LSF_SERVERDIR/elim.qpu
 ```
 
-<li>Create the env.qpu file containing the CRN and API key. This information may be obtained from the IBM Quantum Platform dashboard for a given user account. Note that this information is essential to enable the correct operation of elim.qpu. Note that this assumes that host on which elim.qpu is executing has access to the IBM Quantum Platform. The file should be owned by the LSF Administrator user with permissions octal 400.</li>
+<li>Create the env.qpu file containing the CRN and API key. This information may be obtained from the IBM Quantum Platform dashboard for a given user account. Note that this information is essential to enable the correct operation of elim.qpu. Note that this assumes that the host on which elim.qpu is executing has access to the IBM Quantum Platform. The file should be owned by the LSF Administrator user with permissions octal 400.</li>
 
 ```bash
 $LSF_ENVDIR/env.qpu
@@ -266,7 +266,7 @@ ibm_fez       Boolean   N/A   IBM QPU name
 ```bash
 $ lsinfo |grep QPU
 clops         Numeric   Inc   QPU hardware-aware circuit layer operations per second
-pending_jobs  Numeric   Inc   Pendings jobs on QPU
+pending_jobs  Numeric   Inc   Pending jobs on QPU
 readout_error Numeric   Inc   readout error on QPU
 sx_error_medi Numeric   Inc   sx error median on QPU
 cz_error_medi Numeric   Inc   cz error median on QPU
@@ -295,7 +295,7 @@ lsf-manager-002         ok   0.5   0.4   0.2   1%   0.0    53   1     0   69G   
 Use the indices in resource requirements at job submission time: 
 
 ```bash
-# Select QPU with less than 100 pending jobs in queue
+# Select QPU with less than 100 pending jobs in the queue
 bsub -R "select[pending_jobs < 100]" job3_quantum.py
 
 # Select QPU with the lowest median readout error
@@ -305,7 +305,7 @@ bsub -R "order[readout_error_median]" test_circuit.py
 ---
 ### How to Cite This Work
 ---
-Paper including this work is in preparation. Proper reference will be added here in due time. 
+The paper including this work is in preparation. Proper reference will be added here in due time. 
 
 ### Contribution Guidelines
 For information on how to contribute to this project, please take a look at our [contribution guidelines](CONTRIBUTING.md).
