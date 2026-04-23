@@ -7,7 +7,7 @@ quantum computing and high performace compting infrastrtucture. The latter requi
 This repository contains implementation of plugins for IBM LSF workload manager for handling jobs using ![Quantum Resource Management Interface (QRMI)](https://github.com/qiskit-community/qrmi/tree/main), a vendor agnostic library providing a set of APIs to facilitate deployment of workloads on quantum processing units (QPUs).
 
 ## Overview
-Figure 1 depicts workflow of LSF job submission with `esub.qrmi`. The latter uses QRMI template variable from user defined `.env` file and user requirements
+Figure 1 depicts workflow of an LSF job submission with the `esub.qrmi`. The latter uses QRMI template variable from user defined `.env` file and user requirements
 to find the best suitable quantum device. Selection algorithm works as follows:
 1. Get number of qbits and name of the env. file.
 2. Get available quantum devices from IBM Quantum Platform.
@@ -15,7 +15,7 @@ to find the best suitable quantum device. Selection algorithm works as follows:
 4. Select device that is best suited for job requirements. 
 5. Create device specific QRMI environment variables and appends them to a job metadata.
 
-<img width="1317" alt="Screenshot 2025-07-05 at 08 08 13" src="https://github.ibm.com/Vadim-V-Elisseev/qc-hpc-topology/assets/79310/93a5937a-0d57-4c71-9c94-20c0cacccd89">
+![LSF job submission](Figure_1.png) 
 
 
 
