@@ -1,0 +1,71 @@
+[baseline] original circuit qubits: 16
+[baseline] original circuit depth: 16
+[baseline] num_samples: 1000
+[baseline] shots: 4095
+[baseline] flat partition labels: ['L0', 'L1', 'R0', 'R1']
+[baseline] number of QPD bases/cuts: 7
+[baseline] sampling overhead estimate: 4782969.0
+[baseline] estimated exact QPD terms: 279936
+[baseline] generated coefficient count: 999
+[baseline] stream sizes: [('L0', 1998), ('L1', 1998), ('R0', 1998), ('R1', 1998)]
+[baseline] transpiling and executing L0: 1998 circuits
+[baseline] completed L0: transpile=10.180s, execute=181.984s
+[baseline] transpiling and executing L1: 1998 circuits
+[baseline] completed L1: transpile=16.066s, execute=196.274s
+[baseline] transpiling and executing R0: 1998 circuits
+[baseline] completed R0: transpile=12.266s, execute=171.213s
+[baseline] transpiling and executing R1: 1998 circuits
+[baseline] completed R1: transpile=13.342s, execute=143.697s
+[baseline] reconstructed expectation values:
+  ZZZZIIIIIIIIIIII: 0.1693562344808671
+  IIIIZZZZIIIIIIII: -2.634338244443955
+  IIIIIIIIZZZZIIII: -0.9005117676097203
+  IIIIIIIIIIIIZZZZ: -0.3673689026510556
+  ZIIIZIIIZIIIZIII: -0.029405981616813535
+  XIIIXIIIXIIIXIII: -0.7683043952655675
+[baseline] verification against original uncut circuit:
+Observable: ZZZZIIIIIIIIIIII
+Reconstructed expectation value: 0.16935623
+Exact expectation value: 0.01312612
+Error in estimation: 0.15623011
+Relative error in estimation: 11.9022263
+Observable: IIIIZZZZIIIIIIII
+Reconstructed expectation value: -2.63433824
+Exact expectation value: -0.00378751
+Error in estimation: -2.63055073
+Relative error in estimation: 694.53286551
+Observable: IIIIIIIIZZZZIIII
+Reconstructed expectation value: -0.90051177
+Exact expectation value: 0.01085947
+Error in estimation: -0.91137124
+Relative error in estimation: -83.92409661
+Observable: IIIIIIIIIIIIZZZZ
+Reconstructed expectation value: -0.3673689
+Exact expectation value: -0.04108418
+Error in estimation: -0.32628472
+Relative error in estimation: 7.94185818
+Observable: ZIIIZIIIZIIIZIII
+Reconstructed expectation value: -0.02940598
+Exact expectation value: -0.00038038
+Error in estimation: -0.0290256
+Relative error in estimation: 76.30672178
+Observable: XIIIXIIIXIIIXIII
+Reconstructed expectation value: -0.7683044
+Exact expectation value: 0.00073564
+Error in estimation: -0.76904003
+Relative error in estimation: -1045.40681456
+[baseline] timing summary:
+  partition_seconds: 0.052858
+  generate_experiments_seconds: 5.175042
+  L0_transpile_seconds: 10.180104
+  L0_execute_seconds: 181.984343
+  L1_transpile_seconds: 16.066331
+  L1_execute_seconds: 196.274063
+  R0_transpile_seconds: 12.265803
+  R0_execute_seconds: 171.213322
+  R1_transpile_seconds: 13.341674
+  R1_execute_seconds: 143.696537
+  reconstruct_seconds: 100.255765
+  verify_seconds: 3.115956
+  total_seconds: 858.455632
+[baseline] workflow complete
