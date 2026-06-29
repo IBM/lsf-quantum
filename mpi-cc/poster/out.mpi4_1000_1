@@ -1,0 +1,86 @@
+[rank 0] circuit qubits=16, depth=16
+[rank 0] NOTE: final combination is explicit hierarchical L*R, not a second call to qiskit's reconstruct_expectation_values().
+[rank 0] first-level cut: L | R
+[rank 0] first-level cuts=3, overhead=729.0
+Rank 0: build_first_level() elapsed time (s): 0.0236358642578125
+[rank 0] second-level cut: L -> L0 | L1
+Rank 2: build_first_level() elapsed time (s): 0.01932668685913086
+Rank 1: build_first_level() elapsed time (s): 0.020061254501342773
+[rank 1] second-level cut: R -> R0 | R1
+Rank 3: build_first_level() elapsed time (s): 0.02014756202697754
+Rank 3: build_second_level() elapsed time (s): 5.0067901611328125e-05
+Rank 2: build_second_level() elapsed time (s): 0.00020265579223632812
+[rank 0] L cuts=2, overhead=81.0
+[rank 1] R cuts=2, overhead=81.0
+Rank 1: build_second_level() elapsed time (s): 0.008185148239135742
+Rank 0: build_second_level() elapsed time (s): 0.009443521499633789
+[rank 0] generated parent=L: coeffs=216, streams=[('L0', 432), ('L1', 432)]
+[rank 0] generated parent=R: coeffs=216, streams=[('R0', 432), ('R1', 432)]
+Rank 0: build_execution_tasks() elapsed time (s): 1.1358659267425537
+[rank 3] executing R->R1: 432 circuits
+[rank 2] executing R->R0: 432 circuits
+[rank 1] executing L->L1: 432 circuits
+[rank 0] executing L->L0: 432 circuits
+[rank 3] completed child R->R1: transpile=2.181938s execute=53.621193s
+[rank 0] completed child L->L0: transpile=2.232176s execute=61.455681s
+[rank 2] completed child R->R0: transpile=2.190576s execute=81.287078s
+[rank 1] completed child L->L1: transpile=2.197461s execute=81.828761s
+Rank 1: execute_level_two_tasks() elapsed time (s): 91.31305456161499
+Rank 2: execute_level_two_tasks() elapsed time (s): 91.3234293460846
+Rank 3: execute_level_two_tasks() elapsed time (s): 91.32804417610168
+[rank 0] gathered level-2 execution archive
+  parent=L child=L0 rank=0 circuits=432
+  parent=L child=L1 rank=1 circuits=432
+  parent=R child=R0 rank=2 circuits=432
+  parent=R child=R1 rank=3 circuits=432
+Rank 0: execute_level_two_tasks() elapsed time (s): 90.20865964889526
+Rank 3: reconstruct_level_two_mpi() elapsed time (s): 0.8817653656005859
+main() elapsed time (s): 92.25916719436646
+Rank 2: reconstruct_level_two_mpi() elapsed time (s): 0.8867645263671875
+main() elapsed time (s): 92.25271582603455
+[rank 0] reconstructed parent L from L0,L1
+[rank 1] reconstructed parent R from R0,R1
+Rank 1: reconstruct_level_two_mpi() elapsed time (s): 12.043781042098999
+main() elapsed time (s): 103.43093752861023
+Rank 0: reconstruct_level_two_mpi() elapsed time (s): 12.014185905456543
+[rank 0] final hierarchical reconstructed expectation values:
+Rank 0: final_hierarchical_combine() elapsed time (s): 2.5033950805664062e-05
+  ZZZZIIIIIIIIIIII: 0.15588623268862692
+  IIIIZZZZIIIIIIII: -0.054269891545244864
+  IIIIIIIIZZZZIIII: -0.059967361359925905
+  IIIIIIIIIIIIZZZZ: 0.002302141301338888
+  ZIIIZIIIZIIIZIII: -0.0002435065248604909
+  XIIIXIIIXIIIXIII: -0.00036242732712920785
+[rank 0] verification against original uncut circuit:
+Observable: ZZZZIIIIIIIIIIII
+Reconstructed expectation value: 0.15588623
+Exact expectation value: 0.01312612
+Error in estimation: 0.14276011
+Relative error in estimation: 10.87602841
+Observable: IIIIZZZZIIIIIIII
+Reconstructed expectation value: -0.05426989
+Exact expectation value: -0.00378751
+Error in estimation: -0.05048238
+Relative error in estimation: 13.32864335
+Observable: IIIIIIIIZZZZIIII
+Reconstructed expectation value: -0.05996736
+Exact expectation value: 0.01085947
+Error in estimation: -0.07082683
+Relative error in estimation: -6.5221258
+Observable: IIIIIIIIIIIIZZZZ
+Reconstructed expectation value: 0.00230214
+Exact expectation value: -0.04108418
+Error in estimation: 0.04338632
+Relative error in estimation: -1.05603474
+Observable: ZIIIZIIIZIIIZIII
+Reconstructed expectation value: -0.00024351
+Exact expectation value: -0.00038038
+Error in estimation: 0.00013687
+Relative error in estimation: -0.35983463
+Observable: XIIIXIIIXIIIXIII
+Reconstructed expectation value: -0.00036243
+Exact expectation value: 0.00073564
+Error in estimation: -0.00109806
+Relative error in estimation: -1.49267136
+[rank 0] workflow complete
+main() elapsed time (s): 103.53113198280334
