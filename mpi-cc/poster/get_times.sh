@@ -37,13 +37,21 @@ max_args() {
     printf "%s\n" "$@" | awk 'NR==1 || $1 > max {max=$1} END {print max}'
 }
 
+sum_args() {
+    printf "%s\n" "$@" | awk '{sum += $1} END {print sum}'
+}
+
 for bench in base mpi4 mpi8 
 do	
   for samples in 100 1000 10000 100000
   do
      file="out.$bench"_"$samples"
      vals=$(get_times_file $bench $file)
-     max_val=$(max_args $vals)
+     if [ $bench == "base" ]; then
+         max_val=$(sum_args $vals)
+     else    
+         max_val=$(max_args $vals)
+     fi    
      echo $bench $samples $max_val
      echo "                  "
   done   
