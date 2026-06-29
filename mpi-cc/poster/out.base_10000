@@ -1,0 +1,13 @@
+[baseline] original circuit qubits: 16
+[baseline] original circuit depth: 16
+[baseline] num_samples: 10000
+[baseline] shots: 4095
+[baseline] flat partition labels: ['L0', 'L1', 'R0', 'R1']
+[baseline] number of QPD bases/cuts: 7
+[baseline] sampling overhead estimate: 4782969.0
+[baseline] estimated exact QPD terms: 279936
+[baseline] generated coefficient count: 9864
+[baseline] stream sizes: [('L0', 19728), ('L1', 19728), ('R0', 19728), ('R1', 19728)]
+[baseline] transpiling and executing L0: 19728 circuits
+[baseline] completed L0: transpile=61.110s, execute=1640.295s
+[baseline] transpiling and executing L1: 19728 circuits

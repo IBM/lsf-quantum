@@ -1,0 +1,88 @@
+[rank 0] circuit qubits=16, depth=16
+[rank 0] num_samples=10000, shots=4096
+[rank 0] NOTE: level-3 leaf reconstruction uses Qiskit; upper-level combines are explicit observable-wise products.
+[rank 0] level 1 L|R: cuts=3, overhead=729.0, time=0.018701s
+[rank 0] level 2 L0|L1: cuts=2, overhead=81.0, time=0.002695s
+[rank 1] level 2 R0|R1: cuts=2, overhead=81.0, time=0.007572s
+[rank 1] level 3 L1: children=['L10', 'L11'], cuts=4, overhead=6561.0, time=0.002324s
+[rank 0] level 3 L0: children=['L00', 'L01'], cuts=4, overhead=6561.0, time=0.002208s
+[rank 3] level 3 R1: children=['R10', 'R11'], cuts=4, overhead=6561.0, time=0.007404s
+[rank 2] level 3 R0: children=['R00', 'R01'], cuts=4, overhead=6561.0, time=0.007514s
+[rank 0] generated level-3 experiments for L0: coeffs=1296, streams=[('L00', 1296), ('L01', 2592)], time=2.444706s
+[rank 0] generated level-3 experiments for L1: coeffs=1296, streams=[('L10', 1296), ('L11', 2592)], time=2.687263s
+[rank 0] generated level-3 experiments for R0: coeffs=1296, streams=[('R00', 1296), ('R01', 2592)], time=2.649253s
+[rank 0] generated level-3 experiments for R1: coeffs=1296, streams=[('R10', 1296), ('R11', 2592)], time=2.644314s
+[rank 2] executing leaf L1->L10: 1296 circuits
+[rank 1] executing leaf L0->L01: 2592 circuits
+[rank 3] executing leaf L1->L11: 2592 circuits
+[rank 5] executing leaf R0->R01: 2592 circuits
+[rank 7] executing leaf R1->R11: 2592 circuits
+[rank 6] executing leaf R1->R10: 1296 circuits
+[rank 4] executing leaf R0->R00: 1296 circuits
+[rank 0] executing leaf L0->L00: 1296 circuits
+[rank 0] completed leaf L0->L00: transpile=2.989633s execute=224.971218s
+[rank 4] completed leaf R0->R00: transpile=2.810403s execute=227.948402s
+[rank 2] completed leaf L1->L10: transpile=2.786043s execute=229.016274s
+[rank 6] completed leaf R1->R10: transpile=2.794931s execute=231.576180s
+[rank 7] completed leaf R1->R11: transpile=5.682837s execute=366.667314s
+[rank 1] completed leaf L0->L01: transpile=5.648539s execute=407.249931s
+[rank 3] completed leaf L1->L11: transpile=5.646482s execute=414.346631s
+[rank 5] completed leaf R0->R01: transpile=5.786160s execute=423.295474s
+[rank 0] gathered leaf execution archive
+  parent=L0 leaf=L00 rank=0 circuits=1296
+  parent=L0 leaf=L01 rank=1 circuits=2592
+  parent=L1 leaf=L10 rank=2 circuits=1296
+  parent=L1 leaf=L11 rank=3 circuits=2592
+  parent=R0 leaf=R00 rank=4 circuits=1296
+  parent=R0 leaf=R01 rank=5 circuits=2592
+  parent=R1 leaf=R10 rank=6 circuits=1296
+  parent=R1 leaf=R11 rank=7 circuits=2592
+[rank 3] reconstructed R1 from leaves ['R10', 'R11'] in 48.913825s
+[rank 1] reconstructed L1 from leaves ['L10', 'L11'] in 49.497610s
+[rank 2] reconstructed R0 from leaves ['R00', 'R01'] in 49.450999s
+[rank 0] reconstructed L0 from leaves ['L00', 'L01'] in 52.601415s
+[rank 0] combined L0,L1 -> L in 0.000017s
+[rank 1] combined R0,R1 -> R in 0.000014s
+[rank 0] combined L,R -> final in 0.000010s
+[rank 0] final three-level hierarchical reconstructed expectation values:
+  ZZZZIIIIIIIIIIII: -1.047595251513149
+  IIIIZZZZIIIIIIII: -0.18368844699091114
+  IIIIIIIIZZZZIIII: -0.1603015986498823
+  IIIIIIIIIIIIZZZZ: -0.11312442923935294
+  ZIIIZIIIZIIIZIII: 3.900477587183617e-05
+  XIIIXIIIXIIIXIII: 0.011422808844762468
+[rank 0] verification against original uncut circuit:
+Observable: ZZZZIIIIIIIIIIII
+Reconstructed expectation value: -1.04759525
+Exact expectation value: 0.01312612
+Error in estimation: -1.06072138
+Relative error in estimation: -80.80994057
+Observable: IIIIZZZZIIIIIIII
+Reconstructed expectation value: -0.18368845
+Exact expectation value: -0.00378751
+Error in estimation: -0.17990094
+Relative error in estimation: 47.49846149
+Observable: IIIIIIIIZZZZIIII
+Reconstructed expectation value: -0.1603016
+Exact expectation value: 0.01085947
+Error in estimation: -0.17116107
+Relative error in estimation: -15.76145646
+Observable: IIIIIIIIIIIIZZZZ
+Reconstructed expectation value: -0.11312443
+Exact expectation value: -0.04108418
+Error in estimation: -0.07204025
+Relative error in estimation: 1.75347912
+Observable: ZIIIZIIIZIIIZIII
+Reconstructed expectation value: 3.9e-05
+Exact expectation value: -0.00038038
+Error in estimation: 0.00041939
+Relative error in estimation: -1.10254143
+Observable: XIIIXIIIXIIIXIII
+Reconstructed expectation value: 0.01142281
+Exact expectation value: 0.00073564
+Error in estimation: 0.01068717
+Relative error in estimation: 14.52777711
+[rank 0] timing summary:
+  verify_seconds: 0.114638
+  total_wall_seconds_rank0: 508.213348
+[rank 0] three-level workflow complete
