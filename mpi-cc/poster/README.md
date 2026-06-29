@@ -9,6 +9,13 @@ Scripts and data used for the IEEE QCE26 poster submission.
 - `sub_mpi.sh` and `sub_seq.sh` - experiments submission using IBM LSF.
 - `Poster_Plots.ipynb` can be used to reproduce the _Circuits Execution Time_ figure.
 
+## Prerequisites
+```
+python -m venv venv
+source venv/bin/activate   
+pip install --upgrade pip
+pip install -r requirements.txt
+```
 ## Experiments
 You can run the experiments using the the following commands
 
