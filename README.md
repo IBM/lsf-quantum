@@ -105,7 +105,7 @@ User can choose different quantum device selection policy.  For example,
 ```
 bsub -Is -a "qrmi(".env", 128)" run_example.sh
 ```
-uses a default _basic_ selector, which chooses the least busy device with at least 128 qubits.
+uses a _default_ selector, which chooses the least busy device with at least 128 qubits.
 
 ```
 bsub -Is -a "qrmi(".env", 128, "health")" run_example.sh
