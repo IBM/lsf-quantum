@@ -100,15 +100,36 @@ QRMI_IBM_QRS_BEST_DEVICE=ibm_kingston
 ```
 **Note: QRMI_IBM_QRS_BEST_DEVICE is not usedby QRMI and is provided for conveniency.**
 
-Now you can submit a QRMI-enabled workload:
+### Quantum Device Selection
+User can choose different quantum device selection policy.  For example, 
 ```
 bsub -Is -a "qrmi(".env", 128)" run_example.sh
 ```
-Alternatevly, if you want to use a particular quantum device:
+uses a default _basic_ selector, which chooses the least busy device with at least 128 qubits.
+
+```
+bsub -Is -a "qrmi(".env", 128, "health")" run_example.sh
+```
+uses a default _health_ selector, which chooses a device based on a composite health score using _T1_, _readout error_ and _queue depth_ attributes of each available device. 
+
+Here is the example of the health-based device selection:
+```
+[DEBUG] Device selection policy: health
+[DEBUG] Device ibm_pittsburgh: qubits=156 T1=0.0µs err=1.0000 queue=679 → score=0.0000
+[DEBUG] Device ibm_boston: qubits=156 T1=0.0µs err=1.0000 queue=124 → score=0.0000
+[DEBUG] Device ibm_fez: qubits=156 T1=0.0µs err=1.0000 queue=435 → score=0.0000
+[DEBUG] Skipping ibm_miami: only 120 qubits < 128 required
+[DEBUG] Device ibm_marrakesh: qubits=156 T1=0.0µs err=1.0000 queue=3 → score=0.0000
+[DEBUG] Device ibm_kingston: qubits=156 T1=0.0µs err=1.0000 queue=475 → score=0.0000
+[DEBUG] Selected ibm_pittsburgh with health score 0.0000
+[DEBUG] Best device:  ibm_pittsburgh
+
+```
+Alternatively, if you want to use a particular quantum device:
 ```
 bsub -Is -a "qrmi(".env", ibm_sherbrook)" run_example.sh
 ```
-**Note: when device name is explicilty asked for, it is taken at face value and no checks for the device availabilty are made.**
+**Note: when device name is explicitly asked for, it is taken at face value and no checks for the device availability are made.**
 
 ## LSF ELIM for IBM Quantum Platform
 
@@ -304,8 +325,7 @@ bsub -R "order[readout_error_median]" test_circuit.py
 
 ---
 ### How to Cite This Work
----
-Paper including this work is in preparation. Proper reference will be added here in due time. 
+_Vadim Elisseev, Vassilis Kalantzis, Gábor Samu, Ritesh Krishna, Practical Example of Resources-Aware Scheduling of Hybrid Quantum-Classical Workflows, to appear in IEEE QCE26 Proceedings._
 
 ### Contribution Guidelines
 For information on how to contribute to this project, please take a look at our [contribution guidelines](CONTRIBUTING.md).
