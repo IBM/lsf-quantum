@@ -16,6 +16,9 @@ Ties are retained at each stage, so lower-priority attributes can break them.
 
 from __future__ import annotations
 
+import argparse
+import json
+
 from dataclasses import dataclass
 from enum import Enum
 from math import isclose
@@ -209,18 +212,88 @@ def qpu_from_qrmi(name: str, qrmi_properties: Mapping[str, Any]) -> QPU:
     return QPU(name=name, attributes=dict(qrmi_properties))
 
 
-def example() -> SelectionResult:
+def _cli_value(text: str) -> Any:
+    """Parse a CLI value as JSON, falling back to the original string.
+
+    Examples: ``127`` becomes int, ``0.01`` becomes float, ``true`` becomes bool,
+    and ``"falcon"`` or ``falcon`` becomes a string.
+    """
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return text
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Select a QPU using priority-ordered resource requirements."
+    )
+    parser.add_argument(
+        "--requirements",
+        required=True,
+        type=json.loads,
+        metavar="JSON_DICTIONARY",
+        help=(
+            "JSON dictionary mapping each attribute to an object containing "
+            "operator, value, and direction. Dictionary order defines priority."
+        ),
+    )
+    parser.add_argument(
+        "--no-deterministic-tie-break",
+        action="store_true",
+        help="Return no selected device when all requested attributes remain tied.",
+    )
+    return parser
+
+
+def example(argv: Sequence[str] | None = None) -> SelectionResult:
+    """Run the paper example using requirements supplied on the command line."""
+    args = build_parser().parse_args(argv)
+
     qpus = [
         QPU("qpu-a", {"Qubits": 156, "ReadoutError": 8.30e-3, "PendingJobs": 73}),
         QPU("qpu-b", {"Qubits": 127, "ReadoutError": 3.10e-3, "PendingJobs": 12}),
         QPU("qpu-c", {"Qubits": 156, "ReadoutError": 4.20e-3, "PendingJobs": 21}),
     ]
-    requirements = [
-        Requirement("Qubits", priority=1, operator=">=", value=127, direction=Direction.MAX),
-        Requirement("ReadoutError", priority=2, operator="<=", value=1.0e-2, direction=Direction.MIN),
-        Requirement("PendingJobs", priority=3, operator=None, direction=Direction.MIN),
-    ]
-    return select_qpu(qpus, requirements)
+
+    if not isinstance(args.requirements, dict) or not args.requirements:
+        raise ValueError("--requirements must be a non-empty JSON dictionary")
+
+    requirements: list[Requirement] = []
+    required_fields = {"operator", "value", "direction"}
+    for priority, (attribute, specification) in enumerate(
+        args.requirements.items(), start=1
+    ):
+        if not isinstance(specification, dict):
+            raise ValueError(
+                f"Requirement {attribute!r} must map to a dictionary"
+            )
+        missing = required_fields - specification.keys()
+        unknown = specification.keys() - required_fields
+        if missing:
+            raise ValueError(
+                f"Requirement {attribute!r} is missing fields: "
+                f"{', '.join(sorted(missing))}"
+            )
+        if unknown:
+            raise ValueError(
+                f"Requirement {attribute!r} has unknown fields: "
+                f"{', '.join(sorted(unknown))}"
+            )
+        requirements.append(
+            Requirement(
+                attribute=attribute,
+                priority=priority,
+                operator=specification["operator"],
+                value=specification["value"],
+                direction=Direction(str(specification["direction"]).lower()),
+            )
+        )
+    return select_qpu(
+        qpus,
+        requirements,
+        deterministic_tie_break=not args.no_deterministic_tie_break,
+    )
 
 
 if __name__ == "__main__":
