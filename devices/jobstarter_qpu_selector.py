@@ -236,6 +236,91 @@ def _cli_value(text: str) -> Any:
         return text
 
 
+
+def requirements_from_dict(
+    requirements_dict: Mapping[str, Mapping[str, Any]],
+) -> list[Requirement]:
+    """Convert an ordered requirements dictionary into Requirement objects.
+
+    Dictionary insertion order defines requirement priority.
+
+    Example
+    -------
+    {
+        "qubits": {
+            "operator": ">=",
+            "value": 127,
+            "direction": "max",
+        },
+        "readout_error_median": {
+            "operator": "<=",
+            "value": 0.01,
+            "direction": "min",
+        },
+    }
+    """
+
+    if not isinstance(requirements_dict, dict) or not requirements_dict:
+        raise ValueError("requirements must be a non-empty JSON dictionary")
+
+    required_fields = {"operator", "value", "direction"}
+    requirements: list[Requirement] = []
+
+    for priority, (attribute, specification) in enumerate(
+        requirements_dict.items(),
+        start=1,
+    ):
+        if not isinstance(specification, dict):
+            raise ValueError(
+                f"Requirement {attribute!r} must map to a dictionary"
+            )
+
+        missing = required_fields - specification.keys()
+        unknown = specification.keys() - required_fields
+
+        if missing:
+            raise ValueError(
+                f"Requirement {attribute!r} is missing fields: "
+                f"{', '.join(sorted(missing))}"
+            )
+
+        if unknown:
+            raise ValueError(
+                f"Requirement {attribute!r} has unknown fields: "
+                f"{', '.join(sorted(unknown))}"
+            )
+
+        requirements.append(
+            Requirement(
+                attribute=attribute,
+                priority=priority,
+                operator=specification["operator"],
+                value=specification["value"],
+                direction=Direction(
+                    str(specification["direction"]).lower()
+                ),
+            )
+        )
+
+    return requirements
+
+
+def select_qpu_from_dict(
+    qpus: Iterable[QPU],
+    requirements_dict: Mapping[str, Mapping[str, Any]],
+    *,
+    deterministic_tie_break: bool = True,
+) -> SelectionResult:
+    """Select a QPU directly from an ordered requirements dictionary."""
+
+    requirements = requirements_from_dict(requirements_dict)
+
+    return select_qpu(
+        qpus,
+        requirements,
+        deterministic_tie_break=deterministic_tie_break,
+    )
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Select a QPU using priority-ordered resource requirements."
@@ -259,51 +344,39 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def example(argv: Sequence[str] | None = None) -> SelectionResult:
-    """Run the paper example using requirements supplied on the command line."""
+    """Run the paper example using a requirements dictionary."""
     args = build_parser().parse_args(argv)
 
     qpus = [
-        QPU("qpu-a", {"Qubits": 156, "ReadoutError": 8.30e-3, "PendingJobs": 73}),
-        QPU("qpu-b", {"Qubits": 127, "ReadoutError": 3.10e-3, "PendingJobs": 12}),
-        QPU("qpu-c", {"Qubits": 156, "ReadoutError": 4.20e-3, "PendingJobs": 21}),
+        QPU(
+            "qpu-a",
+            {
+                "qubits": 156,
+                "readout_error_median": 8.30e-3,
+                "pending_jobs": 73,
+            },
+        ),
+        QPU(
+            "qpu-b",
+            {
+                "qubits": 127,
+                "readout_error_median": 3.10e-3,
+                "pending_jobs": 12,
+            },
+        ),
+        QPU(
+            "qpu-c",
+            {
+                "qubits": 156,
+                "readout_error_median": 4.20e-3,
+                "pending_jobs": 21,
+            },
+        ),
     ]
 
-    if not isinstance(args.requirements, dict) or not args.requirements:
-        raise ValueError("--requirements must be a non-empty JSON dictionary")
-
-    requirements: list[Requirement] = []
-    required_fields = {"operator", "value", "direction"}
-    for priority, (attribute, specification) in enumerate(
-        args.requirements.items(), start=1
-    ):
-        if not isinstance(specification, dict):
-            raise ValueError(
-                f"Requirement {attribute!r} must map to a dictionary"
-            )
-        missing = required_fields - specification.keys()
-        unknown = specification.keys() - required_fields
-        if missing:
-            raise ValueError(
-                f"Requirement {attribute!r} is missing fields: "
-                f"{', '.join(sorted(missing))}"
-            )
-        if unknown:
-            raise ValueError(
-                f"Requirement {attribute!r} has unknown fields: "
-                f"{', '.join(sorted(unknown))}"
-            )
-        requirements.append(
-            Requirement(
-                attribute=attribute,
-                priority=priority,
-                operator=specification["operator"],
-                value=specification["value"],
-                direction=Direction(str(specification["direction"]).lower()),
-            )
-        )
-    return select_qpu(
+    return select_qpu_from_dict(
         qpus,
-        requirements,
+        args.requirements,
         deterministic_tie_break=not args.no_deterministic_tie_break,
     )
 

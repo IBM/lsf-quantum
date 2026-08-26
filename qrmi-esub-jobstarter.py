@@ -15,10 +15,17 @@ import os
 import time
 import json
 import argparse
+import base64
 import requests
 import subprocess
 from dotenv import dotenv_values
 from operator import itemgetter
+
+from devices.jobstarter_qpu_selector import (
+    QPU,
+    select_qpu_from_dict,
+)
+
 
 # Functions
 
@@ -337,6 +344,131 @@ def select_device_health(req_qubits, devices_status, devices_config):
 #devices_defaults = get_device_topology(token, devices, "defaults")
 #-------------------------------------------------------------------------
 
+def build_qpu_objects(devices_status, devices_config):
+    """
+    Convert IBM Quantum topology into generic QPU objects
+    used by the priority-based QPU selector.
+    """
+
+    status_map = {}
+
+    for element in devices_status:
+        name = element.get("device")
+
+        if not name:
+            continue
+
+        status_map[name] = {
+            "status": element.get("message", "unavailable"),
+            "queue": element.get("length_queue", 999),
+        }
+
+    config_map = {}
+
+    for element in devices_config:
+        name = element.get("device")
+
+        if not name:
+            continue
+
+        config_map[name] = {
+            "qubits": element.get("n_qubits", 0),
+            "T1_median_µs": element.get("T1_median_µs", 0.0),
+            "readout_error_median": element.get(
+                "readout_error_median",
+                1.0,
+            ),
+        }
+
+    qpus = []
+
+    for name, config in config_map.items():
+
+        status = status_map.get(name)
+
+        if not status:
+            continue
+
+        if status["status"] != "available":
+            continue
+
+        attributes = {
+            "qubits": config["qubits"],
+            "T1_median_µs": config["T1_median_µs"],
+            "readout_error_median": config["readout_error_median"],
+            "pending_jobs": status["queue"],
+        }
+
+        qpus.append(
+            QPU(
+                name=name,
+                attributes=attributes,
+            )
+        )
+
+    return qpus
+
+
+def select_device_priority(
+    requirements,
+    devices_status,
+    devices_config,
+):
+    """
+    Select a QPU using a priority-ordered requirements dictionary.
+
+    Dictionary insertion order defines requirement priority.
+    """
+
+    qpus = build_qpu_objects(
+        devices_status,
+        devices_config,
+    )
+
+    if not qpus:
+        print_debug("No available QPUs for priority selection")
+        return None
+
+    result = select_qpu_from_dict(
+        qpus,
+        requirements,
+    )
+
+    if result.selected:
+        print_debug(
+            "Priority selector selected device:",
+            result.selected.name,
+        )
+
+        if debug == "level2":
+            print_debug(
+                "Selection reason:",
+                result.reason,
+            )
+
+            for trace in result.trace:
+                print_debug(
+                    "Priority trace:",
+                    {
+                        "priority": trace.priority,
+                        "attribute": trace.attribute,
+                        "before": trace.candidates_before,
+                        "feasible": trace.feasible,
+                        "best_value": trace.best_value,
+                        "after": trace.candidates_after,
+                    },
+                )
+
+        return result.selected.name
+
+    print_debug(
+        "Priority selector did not find a suitable device:",
+        result.reason,
+    )
+
+    return None
+
+
 def build_qrmi_vars_job(config, device):
     """
     Build QRMI environment variables with device for a job
@@ -347,6 +479,8 @@ def build_qrmi_vars_job(config, device):
             os.environ[tmp] = str(val)
             os.environ.pop(key)
     os.environ['QRMI_IBM_QRS_BEST_DEVICE'] = device
+    os.environ['QRMI_JOB_QPU_RESOURCES'] = device
+    os.environ['QRMI_JOB_QPU_TYPES'] = 'qiskit-runtime-service'
 
 def build_qrmi_vars_lsf(config, device):
     """
@@ -379,9 +513,17 @@ def transfer_vars_lsf(config, requests):
         lsf_var = lsf_var + key + '=' + val + ','
     # User requests
     for key, val in requests.items():
-        if key == 'file':
+        if key in ('file', 'request') or val is None:
             continue
-        lsf_var = lsf_var + 'ESUB_USER_REQ_' + key.upper() + '=' + str(val) + ','
+
+        lsf_var = (
+            lsf_var
+            + 'ESUB_USER_REQ_'
+            + key.upper()
+            + '='
+            + str(val)
+            + ','
+        )
     if debug:
         lsf_var = lsf_var + 'LSF_QRMI_DEBUG=' + debug + ','
     lsf_var = lsf_var + '"'
@@ -428,12 +570,29 @@ def read_config_from_env():
         config.update({"QRMI_IBM_QRS_SESSION_MODE": mode})
 
     user_qubits = os.getenv("ESUB_USER_REQ_QUBITS")
-    if not user_qubits:
-        print_error("No ESUB_USER_REQ_QUBITS provided")
-    config.update({"ESUB_USER_REQ_QUBITS": user_qubits})
+    if user_qubits:
+        config.update({"ESUB_USER_REQ_QUBITS": user_qubits})
+
+    user_requirements = os.getenv("ESUB_USER_REQ_REQUIREMENTS")
+    if user_requirements:
+        config.update({
+            "ESUB_USER_REQ_REQUIREMENTS": user_requirements
+        })
+
+    user_requirements_b64 = os.getenv(
+        "ESUB_USER_REQ_REQUIREMENTS_B64"
+    )
+    if user_requirements_b64:
+        config.update({
+            "ESUB_USER_REQ_REQUIREMENTS_B64":
+                user_requirements_b64
+        })
 
     device_selector = os.getenv("ESUB_USER_REQ_SELECTOR")
-    config.update({"ESUB_USER_REQ_SELECTOR": device_selector})
+    if device_selector:
+        config.update({
+            "ESUB_USER_REQ_SELECTOR": device_selector
+        })
 
     return config
 
@@ -465,11 +624,83 @@ if identity == "esub":
           export LSF_ESUB_QRMI_DEBUG=level2 enables level1 and more
     """
     )
-    parser.add_argument("file", type=argparse.FileType('r'), help="File with user REST API creds")
-    parser.add_argument("qubits", type=int, help="Number of qubits")
-    parser.add_argument("selector", type=str, nargs='?', help="Quantum device selection policy: basic, health", const = 1, default = "basic")
-    parser.add_argument("device", type=str, nargs='?', help="Quantum device")
-    args = parser.parse_args()
+    parser.add_argument(
+        "file",
+        type=argparse.FileType("r"),
+        help="File with user REST API creds",
+    )
+    parser.add_argument(
+        "request",
+        type=str,
+        help=(
+            "Number of qubits for basic/health selection, or a JSON "
+            "requirements dictionary for priority selection"
+        ),
+    )
+    parser.add_argument(
+        "selector",
+        type=str,
+        nargs="?",
+        help="Quantum device selection policy: basic, health, priority",
+        default="basic",
+    )
+    parser.add_argument(
+        "device",
+        type=str,
+        nargs="?",
+        help="Quantum device",
+    )
+    # LSF application arguments are comma-separated.  A JSON requirements
+    # dictionary therefore arrives as multiple argv elements.  For the
+    # priority policy, reconstruct the dictionary before argparse processes it.
+    if len(sys.argv) >= 4 and sys.argv[-1] == "priority":
+        reconstructed_request = ",".join(sys.argv[2:-1])
+
+        parser_argv = [
+            sys.argv[1],
+            reconstructed_request,
+            "priority",
+        ]
+
+
+        args = parser.parse_args(parser_argv)
+    else:
+        args = parser.parse_args()
+
+    if args.selector == "priority":
+        try:
+            requirements = json.loads(args.request)
+        except json.JSONDecodeError as exc:
+            print_error(
+                f"Invalid priority requirements dictionary: {exc}"
+            )
+
+        if not isinstance(requirements, dict) or not requirements:
+            print_error(
+                "Priority selection requires a non-empty JSON dictionary"
+            )
+
+        requirements_json = json.dumps(
+            requirements,
+            separators=(",", ":"),
+        )
+
+        args.requirements_b64 = base64.b64encode(
+            requirements_json.encode("utf-8")
+        ).decode("ascii")
+
+        args.requirements = None
+        args.qubits = None
+    else:
+        try:
+            args.qubits = int(args.request)
+        except ValueError:
+            print_error(
+                "Qubit request must be an integer for basic/health selection"
+            )
+
+        args.requirements = None
+        args.requirements_b64 = None
 else:
     # Arguments to pass on to the actual job
     job_args = sys.argv[1:]
@@ -520,17 +751,30 @@ devices_config = get_device_topology(token, devices, "configuration")
 if not devices_config:
     print_error("No configuration of quantum devices.")
 if debug == 'level2':
-    print_debug("Configuration: ", devices_config)
+    config_summary = [
+        {
+            "device": item.get("device"),
+            "n_qubits": item.get("n_qubits"),
+            "backend_version": item.get("backend_version"),
+            "processor_type": item.get("processor_type"),
+        }
+        for item in devices_config
+    ]
+    print_debug("Configuration summary: ", config_summary)
 
 
-# Select best device for a job 
-qubits = int(config['ESUB_USER_REQ_QUBITS'])
-policy = config['ESUB_USER_REQ_SELECTOR']
+# Select best device for a job
+policy = config.get(
+    'ESUB_USER_REQ_SELECTOR',
+    'basic',
+)
+
 print_debug("Device selection policy:", policy)
 
 selectors = {
     "basic": select_device_default,
     "health": select_device_health,
+    "priority": select_device_priority,
 }
 
 try:
@@ -539,12 +783,57 @@ except KeyError:
     print_error(f"Unknown policy: {policy}")
     raise SystemExit(2)
 
+if policy == "priority":
+    requirements_b64 = config.get(
+        "ESUB_USER_REQ_REQUIREMENTS_B64"
+    )
 
-best_device = select_device(
-    qubits,
-    devices_status,
-    devices_config,
-)
+    if not requirements_b64:
+        print_error(
+            "No ESUB_USER_REQ_REQUIREMENTS_B64 provided "
+            "for priority selection"
+        )
+
+    try:
+        requirements_json = base64.b64decode(
+            requirements_b64
+        ).decode("utf-8")
+
+        requirements = json.loads(
+            requirements_json
+        )
+    except (
+        ValueError,
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+    ) as exc:
+        print_error(
+            f"Cannot decode priority requirements: {exc}"
+        )
+
+    best_device = select_device(
+        requirements,
+        devices_status,
+        devices_config,
+    )
+
+else:
+    qubits_value = config.get(
+        "ESUB_USER_REQ_QUBITS"
+    )
+
+    if not qubits_value:
+        print_error(
+            "No ESUB_USER_REQ_QUBITS provided"
+        )
+
+    qubits = int(qubits_value)
+
+    best_device = select_device(
+        qubits,
+        devices_status,
+        devices_config,
+    )
 
 if not best_device:
     print_error("No suitable quantum device available.")
