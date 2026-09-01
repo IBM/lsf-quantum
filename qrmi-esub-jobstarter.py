@@ -14,11 +14,127 @@ import sys
 import os
 import time
 import json
-import argparse
 import requests
 import subprocess
 from dotenv import dotenv_values
 from operator import itemgetter
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Optional
+
+from omegaconf import MISSING, OmegaConf
+
+@dataclass
+class QPUAttributes:
+    """Attributes used to describe and select a quantum processing unit."""
+
+    # Number of qubits on the QPU
+    qubits: int = MISSING
+
+    # QPU version
+    qpu_version: Optional[str] = None
+
+    # QPU processor type
+    processor_type: Optional[str] = None
+
+    # Hardware-aware circuit layer operations per second
+    clops: Optional[float] = None
+
+    # Number of jobs currently pending on the QPU
+    pending_jobs: Optional[int] = None
+
+    # Median QPU readout error
+    readout_error_median: Optional[float] = None
+
+    # Median QPU SX-gate error
+    sx_error_median: Optional[float] = None
+
+    # Median QPU CZ-gate error
+    cz_error_median: Optional[float] = None
+
+    # Median T1 coherence time in microseconds
+    T1_median_us: Optional[float] = None
+
+    # Median T2 coherence time in microseconds
+    T2_median_us: Optional[float] = None
+
+@dataclass
+class Config:
+    """Application command-line configuration."""
+
+    # File containing user REST API credentials
+    file: Path = MISSING
+
+    # QPU selection policy
+    selector: str = "basic"
+
+    # Explicit QPU device name, when required
+    device: Optional[str] = None
+
+    # Requested or reported QPU attributes
+    qpu: Optional[QPUAttributes] = None
+
+def validate_qpu_attributes(qpu: QPUAttributes) -> None:
+    """Validate only the QPU attributes that were supplied."""
+
+    if qpu.qubits is not None and qpu.qubits <= 0:
+        raise ValueError("qpu.qubits must be greater than zero")
+
+    if qpu.pending_jobs is not None and qpu.pending_jobs < 0:
+        raise ValueError("qpu.pending_jobs must not be negative")
+
+    nonnegative_metrics = {
+        "clops": qpu.clops,
+        "readout_error_median": qpu.readout_error_median,
+        "sx_error_median": qpu.sx_error_median,
+        "cz_error_median": qpu.cz_error_median,
+        "T1_median_us": qpu.T1_median_us,
+        "T2_median_us": qpu.T2_median_us,
+    }
+
+    for name, value in nonnegative_metrics.items():
+        if value is not None and value < 0:
+            raise ValueError(f"qpu.{name} must not be negative")
+
+def parse_config() -> Config:
+    """Parse and validate key=value command-line arguments."""
+
+    defaults = OmegaConf.structured(Config)
+    cli = OmegaConf.from_cli()
+
+    # Prevent command-line arguments from introducing unknown fields.
+    OmegaConf.set_struct(defaults, True)
+
+    cfg = OmegaConf.merge(defaults, cli)
+
+    # Resolve interpolations and raise an error for missing required values.
+    OmegaConf.resolve(cfg)
+    config: Config = OmegaConf.to_object(cfg)
+
+    device_present = config.device is not None
+    qpu_present = config.qpu is not None
+
+    if device_present == qpu_present:
+        raise ValueError(
+                "Specify exactly one of device=<name> or ""qpu.<attribute>=<value>"
+                )  
+
+    # Validate QPU attributes
+    if config.qpu is not None:
+        validate_qpu_attributes(config.qpu)
+
+    # Validate selectors
+    allowed_selectors = {"basic", "health", "priority"}
+    if config.selector not in allowed_selectors:
+        raise ValueError(
+            f"Invalid selector {config.selector!r}; "
+            f"expected one of {sorted(allowed_selectors)}"
+        )
+
+
+    return config
+
 
 # Functions
 
@@ -452,24 +568,26 @@ if identity != 'esub' and identity != 'jobstarter':
 
 # Parse the command line
 if identity == "esub":
-    parser = argparse.ArgumentParser(
-        description="esub.qrmi for IBM Spectrum LSF",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-    Number of qubits is ignored when quantum device name is provided,
-    examples:
-            bsub -a "qrmi(.env, 128)" my_quantum_app
-            bsub -a "qrmi(.env, 128, ibm_blue)" my_quantum_app
 
-    note: export LSF_ESUB_QRMI_DEBUG=level1 enables debugging messages
-          export LSF_ESUB_QRMI_DEBUG=level2 enables level1 and more
-    """
-    )
-    parser.add_argument("file", type=argparse.FileType('r'), help="File with user REST API creds")
-    parser.add_argument("qubits", type=int, help="Number of qubits")
-    parser.add_argument("selector", type=str, nargs='?', help="Quantum device selection policy: basic, health", const = 1, default = "basic")
-    parser.add_argument("device", type=str, nargs='?', help="Quantum device")
-    args = parser.parse_args()
+    config = parse_config()
+
+    with config.file.open("r", encoding="utf-8") as credentials_file:
+        print(f"Credentials file: {credentials_file.name}")
+        print(f"Selection policy: {config.selector}")
+        print(f"Selected device: {config.device}")
+
+        if config.qpu is not None:
+            print(f"Qubits: {config.qpu.qubits}")
+            print(f"QPU version: {config.qpu.qpu_version}")
+            print(f"Processor type: {config.qpu.processor_type}")
+            print(f"CLOPS: {config.qpu.clops}")
+            print(f"Pending jobs: {config.qpu.pending_jobs}")
+            print(f"Readout error median: {config.qpu.readout_error_median}")
+            print(f"SX error median: {config.qpu.sx_error_median}")
+            print(f"CZ error median: {config.qpu.cz_error_median}")
+            print(f"T1 median: {config.qpu.T1_median_us} us")
+            print(f"T2 median: {config.qpu.T2_median_us} us")
+
 else:
     # Arguments to pass on to the actual job
     job_args = sys.argv[1:]
@@ -477,18 +595,18 @@ else:
 # Do what esub is supposed to do.
 if identity == "esub":
     # Read config file
-    config = read_config_file(args.file)
-    if not config:
-        print_error("Cannot read configuration file {args.file.name}")
+    creds = read_config_file(credentials_file)
+    if not creds:
+        print_error("Cannot read credentials file {credentials_file.name}")
 
     # If device name is provided by a user, just use it verbatim.
-    if args.device:
+    if config.device:
         build_qrmi_vars_lsf(config, args.device)
         print_debug("Created QRMI variables using device", args.device)
     else:
         # Pass creds and resources request to a jobstarter
-        transfer_vars_lsf(config, vars(args))
-        print_debug("Passed creds and requests on")
+        transfer_vars_lsf(creds, vars(config))
+        print_debug("Passed creds and requests to a jobstarter.")
 
     exit(0)
 
