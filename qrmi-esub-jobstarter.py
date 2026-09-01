@@ -25,6 +25,31 @@ from typing import Optional
 
 from omegaconf import MISSING, OmegaConf
 
+# Helpers
+
+def print_debug(message, var=None):
+    """
+    Print message to stderr
+    stdout is not available to esub
+    """
+    if debug:
+        message = "[DEBUG] " + message
+        if var:
+            message = message + " {}"
+            print(message.format(var), file=sys.stderr)
+        else:
+            print(message, file=sys.stderr)
+
+def print_error(message):
+    """
+    Print to stderr and exit
+    """
+    message = "[ERROR] " + message
+    print(message, file=sys.stderr)
+    exit(1)
+
+# Arguments parser
+
 @dataclass
 class QPUAttributes:
     """Attributes used to describe and select a quantum processing unit."""
@@ -132,32 +157,25 @@ def parse_config() -> Config:
             f"expected one of {sorted(allowed_selectors)}"
         )
 
+    print_debug(f"Selection policy: {config.selector}")
+    print_debug(f"Credentials file: {config.file}")
+    print_debug(f"Requested device: {config.device}")
+    print_debug(f"Qubits: {config.qpu.qubits}")
+    print_debug(f"QPU version: {config.qpu.qpu_version}")
+    print_debug(f"Processor type: {config.qpu.processor_type}")
+    print_debug(f"CLOPS: {config.qpu.clops}")
+    print_debug(f"Pending jobs: {config.qpu.pending_jobs}")
+    print_debug(f"Readout error median: {config.qpu.readout_error_median}")
+    print_debug(f"SX error median: {config.qpu.sx_error_median}")
+    print_debug(f"CZ error median: {config.qpu.cz_error_median}")
+    print_debug(f"T1 median: {config.qpu.T1_median_us} us")
+    print_debug(f"T2 median: {config.qpu.T2_median_us} us")
 
     return config
 
 
+
 # Functions
-
-def print_debug(message, var=None):
-    """
-    Print message to stderr
-    stdout is not available to esub
-    """
-    if debug:
-        message = "[DEBUG] " + message
-        if var:
-            message = message + " {}"
-            print(message.format(var), file=sys.stderr)
-        else:
-            print(message, file=sys.stderr)
-
-def print_error(message):
-    """
-    Print to stderr and exit
-    """
-    message = "[ERROR] " + message
-    print(message, file=sys.stderr)
-    exit(1)
 
 def read_config_file(cfile):
     """
@@ -566,42 +584,19 @@ identity = os.path.basename(sys.argv[0]).removesuffix('.qrmi')
 if identity != 'esub' and identity != 'jobstarter':
     print_error("Unknown identity")
 
-# Parse the command line
-if identity == "esub":
-
-    config = parse_config()
-
-    with config.file.open("r", encoding="utf-8") as credentials_file:
-        print(f"Credentials file: {credentials_file.name}")
-        print(f"Selection policy: {config.selector}")
-        print(f"Selected device: {config.device}")
-
-        if config.qpu is not None:
-            print(f"Qubits: {config.qpu.qubits}")
-            print(f"QPU version: {config.qpu.qpu_version}")
-            print(f"Processor type: {config.qpu.processor_type}")
-            print(f"CLOPS: {config.qpu.clops}")
-            print(f"Pending jobs: {config.qpu.pending_jobs}")
-            print(f"Readout error median: {config.qpu.readout_error_median}")
-            print(f"SX error median: {config.qpu.sx_error_median}")
-            print(f"CZ error median: {config.qpu.cz_error_median}")
-            print(f"T1 median: {config.qpu.T1_median_us} us")
-            print(f"T2 median: {config.qpu.T2_median_us} us")
-
-else:
-    # Arguments to pass on to the actual job
-    job_args = sys.argv[1:]
 
 # Do what esub is supposed to do.
 if identity == "esub":
+    # Parse the command line
+    config = parse_config()
     # Read config file
-    creds = read_config_file(credentials_file)
+    creds = read_config_file(config.file)
     if not creds:
         print_error("Cannot read credentials file {credentials_file.name}")
 
     # If device name is provided by a user, just use it verbatim.
     if config.device:
-        build_qrmi_vars_lsf(config, args.device)
+        build_qrmi_vars_lsf(creds, config.device)
         print_debug("Created QRMI variables using device", args.device)
     else:
         # Pass creds and resources request to a jobstarter
@@ -609,6 +604,9 @@ if identity == "esub":
         print_debug("Passed creds and requests to a jobstarter.")
 
     exit(0)
+else:
+    # Arguments to pass on to the actual job
+    job_args = sys.argv[1:]
 
 #=============================================================
 # Acting as a jobstarter from here onwards
