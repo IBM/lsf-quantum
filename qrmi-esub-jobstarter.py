@@ -10,6 +10,7 @@
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
+from __future__ import annotations
 import sys
 import os
 import time
@@ -18,12 +19,13 @@ import requests
 import subprocess
 from dotenv import dotenv_values
 from operator import itemgetter
-
-from dataclasses import dataclass, field
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Optional
-
 from omegaconf import MISSING, OmegaConf
+from statistics import median
+from typing import Any
+from pprint import pprint
 
 # Helpers
 
@@ -55,11 +57,274 @@ def print_error(message):
     else:    
         sys.exit(1)
 
+# QPU metrics extraction
+
+
+NULL_STRINGS = {
+    "",
+    "none",
+    "null",
+    "n/a",
+    "unavailable",
+}
+
+
+def normalize_value(value: Any) -> Any | None:
+    """Convert textual null values to Python None."""
+    if value is None:
+        return None
+
+    if (
+        isinstance(value, str)
+        and value.strip().lower() in NULL_STRINGS
+    ):
+        return None
+
+    return value
+
+
+def safe_median(values: list[float]) -> float | None:
+    """Return the median, or None if the list is empty."""
+    if not values:
+        return None
+
+    return float(median(values))
+
+
+def extract_clops(backend: Any) -> int | float | str | None:
+    """
+    Extract CLOPS from the backend.
+
+    Checks:
+      1. backend.configuration().clops
+      2. backend.configuration().clops_h
+      3. backend.configuration().clops_v
+      4. backend.clops
+    """
+    try:
+        configuration = backend.configuration()
+    except Exception:
+        configuration = None
+
+    candidates: list[Any] = []
+
+    if configuration is not None:
+        candidates.extend(
+            [
+                getattr(configuration, "clops", None),
+                getattr(configuration, "clops_h", None),
+                getattr(configuration, "clops_v", None),
+            ]
+        )
+
+    candidates.append(getattr(backend, "clops", None))
+
+    for candidate in candidates:
+        candidate = normalize_value(candidate)
+
+        if candidate is None:
+            continue
+
+        # Example:
+        # {"type": "hardware", "value": 12345}
+        if isinstance(candidate, dict):
+            candidate = normalize_value(
+                candidate.get("value")
+            )
+
+        # Handle an object with a .value attribute.
+        elif hasattr(candidate, "value"):
+            candidate = normalize_value(
+                getattr(candidate, "value")
+            )
+
+        if candidate is not None:
+            return candidate
+
+    return None
+
+
+def extract_gate_errors(
+    properties: Any,
+    gate_name: str,
+    ) -> list:
+    """
+    Return errors for every calibrated instance of gate_name.
+
+    For example:
+      - sx on individual qubits
+      - cz on connected qubit pairs
+    """
+    errors: list[float] = []
+
+    if properties is None:
+        return errors
+
+    for gate in getattr(properties, "gates", []):
+        calibrated_gate_name = getattr(gate, "gate", None)
+
+        if calibrated_gate_name != gate_name:
+            continue
+
+        qubits = getattr(gate, "qubits", None)
+
+        if qubits is None:
+            continue
+
+        try:
+            value = properties.gate_error(
+                gate_name,
+                tuple(qubits),
+            )
+        except Exception:
+            continue
+
+        value = normalize_value(value)
+
+        if value is not None:
+            errors.append(float(value))
+
+    return errors
+
+
+def get_backend_metrics(
+    backend: Any,
+) -> dict[str, Any]:
+    """
+    Collect IBM Qiskit backend metrics.
+
+    Returned keys:
+      qubits
+      qpu_version
+      processor_type
+      clops
+      pending_jobs
+      readout_error_median
+      sx_error_median
+      cz_error_median
+      T1_median_us
+      T2_median_us
+
+    CZ handling:
+      If CZ is not a calibrated native gate, cz_error_median
+      is returned as Python None.
+
+    CLOPS handling:
+      Supports dictionary, object, scalar, clops_h, and
+      clops_v representations.
+    """
+    num_qubits = normalize_value(
+        getattr(backend, "num_qubits", None)
+    )
+
+    qpu_version = normalize_value(
+        getattr(backend, "backend_version", None)
+    )
+
+    processor_type = normalize_value(
+        getattr(backend, "processor_type", None)
+    )
+
+    clops = extract_clops(backend)
+
+    try:
+        status = backend.status()
+        pending_jobs = normalize_value(
+            getattr(status, "pending_jobs", None)
+        )
+    except Exception:
+        pending_jobs = None
+
+    try:
+        properties = backend.properties()
+    except Exception:
+        properties = None
+
+    readout_errors: list[float] = []
+    t1_values_us: list[float] = []
+    t2_values_us: list[float] = []
+
+    if properties is not None and num_qubits is not None:
+        for qubit in range(int(num_qubits)):
+            try:
+                value = normalize_value(
+                    properties.readout_error(qubit)
+                )
+
+                if value is not None:
+                    readout_errors.append(float(value))
+
+            except Exception:
+                pass
+
+            try:
+                value = normalize_value(
+                    properties.t1(qubit)
+                )
+
+                if value is not None:
+                    # Qiskit returns T1 in seconds.
+                    t1_values_us.append(
+                        float(value) * 1_000_000
+                    )
+
+            except Exception:
+                pass
+
+            try:
+                value = normalize_value(
+                    properties.t2(qubit)
+                )
+
+                if value is not None:
+                    # Qiskit returns T2 in seconds.
+                    t2_values_us.append(
+                        float(value) * 1_000_000
+                    )
+
+            except Exception:
+                pass
+
+    sx_errors = extract_gate_errors(
+        properties,
+        "sx",
+    )
+
+    # If CZ is not present in backend calibration properties,
+    # this produces an empty list and the median becomes None.
+    cz_errors = extract_gate_errors(
+        properties,
+        "cz",
+    )
+
+    return {
+        "qubits": num_qubits,
+        "qpu_version": qpu_version,
+        "processor_type": processor_type,
+        "clops": clops,
+        "pending_jobs": pending_jobs,
+        "readout_error_median": safe_median(
+            readout_errors
+        ),
+        "sx_error_median": safe_median(
+            sx_errors
+        ),
+        "cz_error_median": safe_median(
+            cz_errors
+        ),
+        "T1_median_us": safe_median(
+            t1_values_us
+        ),
+        "T2_median_us": safe_median(
+            t2_values_us
+        ),
+    }
+
 # Arguments parser
 
 @dataclass
 class QPUAttributes:
-    """Attributes used to describe and select a quantum processing unit."""
+    """Attributes used to describe and select quantum processing units."""
 
     # Number of qubits on the QPU
     qubits: Optional[int] = None
@@ -91,6 +356,15 @@ class QPUAttributes:
     # Median T2 coherence time in microseconds
     T2_median_us: Optional[float] = None
 
+    def to_lsf_string(self) -> str:
+        """Convert populated QPU attributes to an LSF-compatible string."""
+        return ";".join(
+            f"{item.name}={getattr(self, item.name)}"
+            for item in fields(self)
+            if getattr(self, item.name) is not None
+        )
+
+
 @dataclass
 class Config:
     """Application command-line configuration."""
@@ -98,7 +372,7 @@ class Config:
     # File containing user REST API credentials
     file: Path = MISSING
 
-    # QPU selection policy
+    # QPU selection
     selector: str = "basic"
 
     # Explicit QPU device name, when required
@@ -172,7 +446,7 @@ def parse_config() -> Config:
             f"expected one of {sorted(allowed_selectors)}"
         )
 
-    print_debug(f"Selection policy: {config.selector}")
+    print_debug(f"Selector : {config.selector}")
     print_debug(f"Credentials file: {config.file}")
     print_debug(f"Requested device: {config.device}")
     if config.qpu != None:
@@ -279,6 +553,8 @@ def get_device_topology(token, devices, request_type):
                     print(f"Response status code: {e.response.status_code}", file=sys.stderr)
                     print(f"Response content: {e.response.text}", file=sys.stderr)
                 return None
+    if debug == 'level2':        
+        print_debug("Devices topology:, devices_topo")        
     return devices_topo
 
 def read_env_vars_from_config(config):
@@ -310,6 +586,569 @@ def read_env_vars_from_config(config):
 
     return token, crn
 
+
+NULL_STRINGS = {
+    "",
+    "none",
+    "null",
+    "n/a",
+    "unavailable",
+}
+
+
+def normalize_value(value: Any) -> Any | None:
+    """Convert textual null values to Python None."""
+    if value is None:
+        return None
+
+    if (
+        isinstance(value, str)
+        and value.strip().lower() in NULL_STRINGS
+    ):
+        return None
+
+    return value
+
+
+def safe_median(values: list[float]) -> float | None:
+    """Return the median, or None when no values are available."""
+    return float(median(values)) if values else None
+
+
+def get_json(
+    session: requests.Session,
+    url: str,
+    timeout: float = 30.0,
+) -> dict[str, Any]:
+    """Perform a REST GET request and return its JSON object."""
+    response = session.get(url, timeout=timeout)
+    response.raise_for_status()
+
+    data = response.json()
+
+    if not isinstance(data, dict):
+        raise TypeError(
+            f"Expected a JSON object from {url}, "
+            f"received {type(data).__name__}"
+        )
+
+    return data
+
+
+def extract_clops(device: dict[str, Any]) -> int | float | str | None:
+    """
+    Extract CLOPS from a backend-list entry.
+
+    The normal REST representation is:
+
+        {
+            "clops": {
+                "type": "hardware",
+                "value": 12345
+            }
+        }
+
+    Scalar CLOPS values are also accepted.
+    """
+    clops = normalize_value(device.get("clops"))
+
+    if isinstance(clops, dict):
+        return normalize_value(clops.get("value"))
+
+    return clops
+
+
+def extract_parameter_value(
+    parameters: list[dict[str, Any]],
+    names: set[str],
+) -> float | None:
+    """
+    Extract a numeric value from a list of REST calibration parameters.
+
+    Parameter matching is case-insensitive.
+    """
+    normalized_names = {
+        name.lower()
+        for name in names
+    }
+
+    for parameter in parameters:
+        name = str(
+            parameter.get("name", "")
+        ).strip().lower()
+
+        if name not in normalized_names:
+            continue
+
+        value = normalize_value(
+            parameter.get("value")
+        )
+
+        if value is None:
+            continue
+
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+
+    return None
+
+
+def convert_time_to_us(
+    value: float,
+    unit: str | None,
+) -> float | None:
+    """
+    Convert a calibration time value to microseconds.
+
+    Known units:
+      s, ms, us, µs, μs, ns
+
+    IBM backend properties normally provide a unit alongside the value.
+    Unknown units return None rather than assuming a conversion.
+    """
+    if unit is None:
+        return None
+
+    normalized_unit = (
+        unit.strip()
+        .lower()
+        .replace("μ", "u")
+        .replace("µ", "u")
+    )
+
+    conversion_to_us = {
+        "s": 1_000_000.0,
+        "ms": 1_000.0,
+        "us": 1.0,
+        "ns": 0.001,
+    }
+
+    multiplier = conversion_to_us.get(
+        normalized_unit
+    )
+
+    if multiplier is None:
+        return None
+
+    return value * multiplier
+
+
+def extract_qubit_metrics(
+    properties: dict[str, Any],
+) -> tuple[
+    list[float],
+    list[float],
+    list[float],
+]:
+    """
+    Extract readout error, T1, and T2 values from REST properties.
+
+    The REST properties schema represents qubits as:
+
+        "qubits": [
+            [
+                {
+                    "name": "T1",
+                    "value": ...,
+                    "unit": "us"
+                },
+                ...
+            ],
+            ...
+        ]
+    """
+    readout_errors: list[float] = []
+    t1_values_us: list[float] = []
+    t2_values_us: list[float] = []
+
+    for qubit_parameters in properties.get(
+        "qubits",
+        [],
+    ):
+        if not isinstance(qubit_parameters, list):
+            continue
+
+        readout_error = extract_parameter_value(
+            qubit_parameters,
+            {
+                "readout_error",
+                "readout error",
+            },
+        )
+
+        if readout_error is not None:
+            readout_errors.append(readout_error)
+
+        for parameter in qubit_parameters:
+            name = str(
+                parameter.get("name", "")
+            ).strip().lower()
+
+            if name not in {"t1", "t2"}:
+                continue
+
+            value = normalize_value(
+                parameter.get("value")
+            )
+            unit = normalize_value(
+                parameter.get("unit")
+            )
+
+            if value is None:
+                continue
+
+            try:
+                numeric_value = float(value)
+            except (TypeError, ValueError):
+                continue
+
+            value_us = convert_time_to_us(
+                numeric_value,
+                str(unit) if unit is not None else None,
+            )
+
+            if value_us is None:
+                continue
+
+            if name == "t1":
+                t1_values_us.append(value_us)
+            else:
+                t2_values_us.append(value_us)
+
+    return (
+        readout_errors,
+        t1_values_us,
+        t2_values_us,
+    )
+
+
+def extract_gate_errors(
+    properties: dict[str, Any],
+    gate_name: str,
+    ) -> list:
+    """
+    Extract all calibrated errors for a specific gate.
+
+    For example:
+      - gate_name="sx" collects all calibrated SX errors.
+      - gate_name="cz" collects all calibrated CZ errors.
+
+    If the backend has no CZ gate, an empty list is returned.
+    """
+    errors: list[float] = []
+
+    for gate in properties.get("gates", []):
+        if not isinstance(gate, dict):
+            continue
+
+        current_gate_name = normalize_value(
+            gate.get("gate")
+        )
+
+        # Some responses may use "name" for the gate name.
+        if current_gate_name is None:
+            current_gate_name = normalize_value(
+                gate.get("name")
+            )
+
+        if (
+            str(current_gate_name).lower()
+            != gate_name.lower()
+        ):
+            continue
+
+        parameters = gate.get("parameters", [])
+
+        if not isinstance(parameters, list):
+            continue
+
+        gate_error = extract_parameter_value(
+            parameters,
+            {
+                "gate_error",
+                "gate error",
+            },
+        )
+
+        if gate_error is not None:
+            errors.append(gate_error)
+
+    return errors
+
+
+def extract_rest_backend_metrics(
+    device: dict[str, Any],
+    configuration: dict[str, Any],
+    properties: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Construct metrics for one REST backend.
+    """
+    readout_errors, t1_values_us, t2_values_us = (
+        extract_qubit_metrics(properties)
+    )
+
+    sx_errors = extract_gate_errors(
+        properties,
+        "sx",
+    )
+
+    # Remains empty if CZ is not a calibrated gate.
+    cz_errors = extract_gate_errors(
+        properties,
+        "cz",
+    )
+
+    performance_metrics = device.get(
+        "performance_metrics",
+        {},
+    )
+
+    if not isinstance(performance_metrics, dict):
+        performance_metrics = {}
+
+    # Prefer calculation from raw calibration data.
+    readout_error_median = safe_median(
+        readout_errors
+    )
+
+    # Fall back to the aggregate from the list endpoint.
+    if readout_error_median is None:
+        aggregate = performance_metrics.get(
+            "readout_error_median"
+        )
+
+        if isinstance(aggregate, dict):
+            aggregate = aggregate.get("value")
+
+        aggregate = normalize_value(aggregate)
+
+        if aggregate is not None:
+            try:
+                readout_error_median = float(
+                    aggregate
+                )
+            except (TypeError, ValueError):
+                pass
+
+    qubits = normalize_value(
+        device.get("qubits")
+    )
+
+    if qubits is None:
+        qubits = normalize_value(
+            configuration.get("n_qubits")
+        )
+
+    qpu_version = normalize_value(
+        configuration.get("backend_version")
+    )
+
+    processor_type = normalize_value(
+        device.get("processor_type")
+    )
+
+    if processor_type is None:
+        processor_type = normalize_value(
+            configuration.get("processor_type")
+        )
+
+    return {
+        "qubits": qubits,
+        "qpu_version": qpu_version,
+        "processor_type": processor_type,
+        "clops": extract_clops(device),
+        "pending_jobs": normalize_value(
+            device.get("queue_length")
+        ),
+        "readout_error_median": (
+            readout_error_median
+        ),
+        "sx_error_median": safe_median(
+            sx_errors
+        ),
+        "cz_error_median": safe_median(
+            cz_errors
+        ),
+        "T1_median_us": safe_median(
+            t1_values_us
+        ),
+        "T2_median_us": safe_median(
+            t2_values_us
+        ),
+    }
+
+
+def get_all_backend_metrics_rest(
+    access_token: str,
+    service_crn: str,
+    *,
+    base_url: str = (
+        "https://quantum.cloud.ibm.com/api"
+    ),
+    api_version: str = "2026-04-15",
+    timeout: float = 30.0,
+) -> dict[str, dict[str, Any]]:
+    """
+    Retrieve all accessible IBM Quantum backends via REST and
+    return a nested metrics dictionary.
+
+    Returns:
+
+        {
+            "backend_name": {
+                "qubits": ...,
+                "qpu_version": ...,
+                "processor_type": ...,
+                "clops": ...,
+                "pending_jobs": ...,
+                "readout_error_median": ...,
+                "sx_error_median": ...,
+                "cz_error_median": ...,
+                "T1_median_us": ...,
+                "T2_median_us": ...
+            }
+        }
+    """
+    session = requests.Session()
+    session.headers.update(
+        {
+            "Accept": "application/json",
+            "Authorization": (
+                f"Bearer {access_token}"
+            ),
+            "Service-CRN": service_crn,
+            "IBM-API-Version": api_version,
+        }
+    )
+
+    list_url = f"{base_url.rstrip('/')}/v1/backends"
+
+    backend_response = get_json(
+        session,
+        list_url,
+        timeout,
+    )
+
+    devices = backend_response.get("devices", [])
+
+    if not isinstance(devices, list):
+        raise TypeError(
+            "REST response field 'devices' "
+            "is not a list"
+        )
+
+    result: dict[str, dict[str, Any]] = {}
+
+    for device in devices:
+        if not isinstance(device, dict):
+            continue
+
+        backend_name = normalize_value(
+            device.get("name")
+        )
+
+        if backend_name is None:
+            continue
+
+        backend_name = str(backend_name)
+
+        backend_url = (
+            f"{base_url.rstrip('/')}"
+            f"/v1/backends/{backend_name}"
+        )
+
+        try:
+            configuration = get_json(
+                session,
+                f"{backend_url}/configuration",
+                timeout,
+            )
+
+            properties = get_json(
+                session,
+                f"{backend_url}/properties",
+                timeout,
+            )
+
+            result[backend_name] = (
+                extract_rest_backend_metrics(
+                    device,
+                    configuration,
+                    properties,
+                )
+            )
+
+        except requests.RequestException as error:
+            # Keep fields already available from the list endpoint
+            # even when configuration or properties cannot be read.
+            result[backend_name] = {
+                "qubits": normalize_value(
+                    device.get("qubits")
+                ),
+                "qpu_version": None,
+                "processor_type": normalize_value(
+                    device.get("processor_type")
+                ),
+                "clops": extract_clops(device),
+                "pending_jobs": normalize_value(
+                    device.get("queue_length")
+                ),
+                "readout_error_median": None,
+                "sx_error_median": None,
+                "cz_error_median": None,
+                "T1_median_us": None,
+                "T2_median_us": None,
+                "error": (
+                    f"{type(error).__name__}: {error}"
+                ),
+            }
+
+    return result
+
+def select_device_priority(user_request, devices_status, devices_config):
+    """
+    Device selection algorithm based on request priority
+
+    qubits 	Number of qubits on QPU
+    qpu_version 	QPU version
+    processor_type 	QPU processor type
+    clops 	QPU hardware-aware circuit layer operations per second
+    pending_jobs 	Pending jobs on QPU
+    readout_error_median 	Median readout error on QPU
+    sx_error_median 	Median SX error on QPU
+    cz_error_median 	Median CZ error on QPU
+    T1_median_us 	T1 median on QPU
+    T2_median_us 	T2 median on QPU
+    """
+    config_map = {}
+    for element in devices_config:
+        name          = element.get('device')
+        qpu_version = element.get('qpu_version')
+        qpu_type = element.get('processor_type')
+        n_qubits      = element.get('n_qubits')
+        t1_us         = element.get('T1_median_µs')   
+        t2_us         = element.get('T2_median_µs')   
+        clops = element.get('clops')
+        readout_error = element.get('pending_jobs')
+        sx_error = element.get('sx_error_median')
+        cz_error = element.get('cz_error_median')
+        if name:
+            config_map[name] = {
+                'n_qubits':      n_qubits,
+                't1_us':         t1_us,
+                't2_us':         t2_us,
+                'readout_error': readout_error,
+                'clops': clops,
+                'cz_error': cz_error,
+                'sx_error': sx_error,
+                'qpu_type': qpu_type,
+                'qpu_version': qpu_version,
+            }
+
+    print(config_map, file=sys.stderr)
 
 def select_device_default(req_qubits, devices_status, devices_config):
     """
@@ -533,7 +1372,12 @@ def transfer_vars_lsf(config, requests):
     for key, val in requests.items():
         if key == 'file':
             continue
-        lsf_var = lsf_var + 'ESUB_USER_REQ_' + key.upper() + '=' + str(val) + ','
+        if isinstance(val, QPUAttributes):
+           value_string = val.to_lsf_string()
+        else:
+            value_string = str(val)
+        lsf_var += f"ESUB_USER_REQ_{key.upper()}={value_string},"
+
     if debug:
         lsf_var = lsf_var + 'LSF_QRMI_DEBUG=' + debug + ','
     lsf_var = lsf_var + '"'
@@ -592,6 +1436,9 @@ def read_config_from_env():
     req_device = os.getenv("ESUB_USER_REQ_DEVICE")
     config.update({"ESUB_USER_REQ_DEVICE": req_device})
 
+    req_qpu = os.getenv("ESUB_USER_REQ_QPU", None)
+    config.update({"ESUB_USER_REQ_QPU": req_qpu})
+
     return config
 
 #-----------------------------------------------------
@@ -634,10 +1481,13 @@ else:
 # Build QRMI environment vars for LSF
 config = read_config_from_env()
 
-#print(config, file=sys.stderr)
+print(config, file=sys.stderr)
 
-device=config["ESUB_USER_REQ_DEVICE"]
-if device != None:
+# If user wants a specific device, just use it. 
+device = config["ESUB_USER_REQ_DEVICE"]
+if isinstance(device, str) and device.strip().lower() in {"none", "null", ""}:
+    device = None
+if device is not None:
     # Set {device}_QRMI variables for a job
     build_qrmi_vars_job(config, device)
     # Launch the job
@@ -660,37 +1510,58 @@ if not devices_status:
     print_error("No status of quantum devices.")
 print_debug("Status: ", devices_status)
 
-# Get number of qubits for each device.
-devices_config = get_device_topology(token, devices, "configuration")
-if not devices_config:
-    print_error("No configuration of quantum devices.")
-if debug == 'level2':
-    print_debug("Configuration: ", devices_config)
+# Get attributes from  each device.
+#devices_config = get_device_topology(token, devices, "configuration")
+#if not devices_config:
+#    print_error("No configuration of quantum devices.")
+#if debug == 'level2':
+#    print_debug("Configuration: ", devices_config)
 
+backend_metrics = get_all_backend_metrics_rest(
+    access_token=token,
+    service_crn=crn,
+)
+
+pprint(
+    backend_metrics,
+    sort_dicts=False,
+    stream=sys.stderr
+)
+exit(0)
 
 # Select best device for a job 
-qubits = int(config['ESUB_USER_REQ_QUBITS'])
-policy = config['ESUB_USER_REQ_SELECTOR']
-print_debug("Device selection policy:", policy)
+selector = config['ESUB_USER_REQ_SELECTOR']
+print_debug("Device selection:", selector)
 
 selectors = {
     "basic": select_device_default,
     "health": select_device_health,
+    "priority": select_device_priority,
 }
 
 try:
-    select_device = selectors[policy]
+    select_device = selectors[selector]
 except KeyError:
-    print_error(f"Unknown policy: {policy}")
+    print_error(f"Unknown selector: {selector}")
     raise SystemExit(2)
 
+user_request = config['ESUB_USER_REQ_QPU']
+print(user_request, file=sys.stderr)
+if selector == 'priority':
+    best_device = select_device(
+        user_request,
+        devices_status,
+        devices_config,
+    )
+else:    
+    #qubits = int(config['ESUB_USER_REQ_QUBITS'])
+    best_device = select_device(
+        qubits,
+        devices_status,
+        devices_config,
+    )
 
-best_device = select_device(
-    qubits,
-    devices_status,
-    devices_config,
-)
-
+sys.exit(0)
 if not best_device:
     print_error("No suitable quantum device available.")
 print_debug("Best device: ", best_device)
