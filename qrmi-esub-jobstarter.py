@@ -33,6 +33,8 @@ def print_debug(message, var=None):
     stdout is not available to esub
     """
     if debug:
+        if message == None:
+            return
         message = "[DEBUG] " + message
         if var:
             message = message + " {}"
@@ -44,9 +46,14 @@ def print_error(message):
     """
     Print to stderr and exit
     """
-    message = "[ERROR] " + message
-    print(message, file=sys.stderr)
-    exit(1)
+    if message != None:
+        message = "[ERROR] " + message
+        print(message, file=sys.stderr)
+
+    if esub_abort_val:
+        sys.exit(int(esub_abort_val))
+    else:    
+        sys.exit(1)
 
 # Arguments parser
 
@@ -55,7 +62,7 @@ class QPUAttributes:
     """Attributes used to describe and select a quantum processing unit."""
 
     # Number of qubits on the QPU
-    qubits: int = MISSING
+    qubits: Optional[int] = None
 
     # QPU version
     qpu_version: Optional[str] = None
@@ -104,10 +111,10 @@ def validate_qpu_attributes(qpu: QPUAttributes) -> None:
     """Validate only the QPU attributes that were supplied."""
 
     if qpu.qubits is not None and qpu.qubits <= 0:
-        raise ValueError("qpu.qubits must be greater than zero")
+        print_error("qpu.qubits must be greater than zero")
 
     if qpu.pending_jobs is not None and qpu.pending_jobs < 0:
-        raise ValueError("qpu.pending_jobs must not be negative")
+        print_error("qpu.pending_jobs must not be negative")
 
     nonnegative_metrics = {
         "clops": qpu.clops,
@@ -119,8 +126,10 @@ def validate_qpu_attributes(qpu: QPUAttributes) -> None:
     }
 
     for name, value in nonnegative_metrics.items():
-        if value is not None and value < 0:
-            raise ValueError(f"qpu.{name} must not be negative")
+        if value is not None:
+            if value < 0:
+              print_error(f"qpu.{name} must not be negative")
+
 
 def parse_config() -> Config:
     """Parse and validate key=value command-line arguments."""
@@ -130,10 +139,16 @@ def parse_config() -> Config:
 
     # Prevent command-line arguments from introducing unknown fields.
     OmegaConf.set_struct(defaults, True)
-
     cfg = OmegaConf.merge(defaults, cli)
 
-    # Resolve interpolations and raise an error for missing required values.
+    # Detect mandatory values before conversion to dataclasses.
+    missing = sorted(OmegaConf.missing_keys(cfg))
+
+    if missing:
+        formatted = ", ".join(missing)
+        print_error("Missing mandatory argument(s)") 
+        sys.exit(esub_abort_val)
+
     OmegaConf.resolve(cfg)
     config: Config = OmegaConf.to_object(cfg)
 
@@ -141,7 +156,7 @@ def parse_config() -> Config:
     qpu_present = config.qpu is not None
 
     if device_present == qpu_present:
-        raise ValueError(
+        print_error(
                 "Specify exactly one of device=<name> or ""qpu.<attribute>=<value>"
                 )  
 
@@ -152,7 +167,7 @@ def parse_config() -> Config:
     # Validate selectors
     allowed_selectors = {"basic", "health", "priority"}
     if config.selector not in allowed_selectors:
-        raise ValueError(
+        print_error(
             f"Invalid selector {config.selector!r}; "
             f"expected one of {sorted(allowed_selectors)}"
         )
@@ -160,16 +175,17 @@ def parse_config() -> Config:
     print_debug(f"Selection policy: {config.selector}")
     print_debug(f"Credentials file: {config.file}")
     print_debug(f"Requested device: {config.device}")
-    print_debug(f"Qubits: {config.qpu.qubits}")
-    print_debug(f"QPU version: {config.qpu.qpu_version}")
-    print_debug(f"Processor type: {config.qpu.processor_type}")
-    print_debug(f"CLOPS: {config.qpu.clops}")
-    print_debug(f"Pending jobs: {config.qpu.pending_jobs}")
-    print_debug(f"Readout error median: {config.qpu.readout_error_median}")
-    print_debug(f"SX error median: {config.qpu.sx_error_median}")
-    print_debug(f"CZ error median: {config.qpu.cz_error_median}")
-    print_debug(f"T1 median: {config.qpu.T1_median_us} us")
-    print_debug(f"T2 median: {config.qpu.T2_median_us} us")
+    if config.qpu != None:
+        print_debug(f"Qubits: {config.qpu.qubits}")
+        print_debug(f"QPU version: {config.qpu.qpu_version}")
+        print_debug(f"Processor type: {config.qpu.processor_type}")
+        print_debug(f"CLOPS: {config.qpu.clops}")
+        print_debug(f"Pending jobs: {config.qpu.pending_jobs}")
+        print_debug(f"Readout error median: {config.qpu.readout_error_median}")
+        print_debug(f"SX error median: {config.qpu.sx_error_median}")
+        print_debug(f"CZ error median: {config.qpu.cz_error_median}")
+        print_debug(f"T1 median: {config.qpu.T1_median_us} us")
+        print_debug(f"T2 median: {config.qpu.T2_median_us} us")
 
     return config
 
@@ -269,28 +285,28 @@ def read_env_vars_from_config(config):
     """
     Read QRMI related variables from $CWD/envfile
     """
-    api_key = config["QRMI_IBM_QRS_IAM_APIKEY"]
+    api_key = config["QRMI_IBM_QCS_IAM_APIKEY"]
     if not api_key:
-        print_error("No QRMI_IBM_QRS_IAM_APIKEY provided")
+        print_error("No QRMI_IBM_QCS_IAM_APIKEY provided")
 
     token = gen_bearer_token(api_key)
     if not token:
         print_error("No IAM bearer token provided.")
 
-    crn = config["QRMI_IBM_QRS_SERVICE_CRN"]
+    crn = config["QRMI_IBM_QCS_SERVICE_CRN"]
     if not crn:
-        print_error("No QRMI_IBM_QRS_SERVICE_CRN provided")
+        print_error("No QRMI_IBM_QCS_SERVICE_CRN provided")
 
-    qrs_endpoint = config["QRMI_IBM_QRS_ENDPOINT"]
+    qrs_endpoint = config["QRMI_IBM_QCS_ENDPOINT"]
     if not qrs_endpoint:
-        print_error("No QRMI_IBM_QRS_ENDPOINT provided")
+        print_error("No QRMI_IBM_QCS_ENDPOINT provided")
 
-    iam_endpoint = config["QRMI_IBM_QRS_IAM_ENDPOINT"]
+    iam_endpoint = config["QRMI_IBM_QCS_IAM_ENDPOINT"]
     if not iam_endpoint:
-        print_error("No QRMI_IBM_QRS_IAM_ENDPOINT provided")
+        print_error("No QRMI_IBM_QCS_IAM_ENDPOINT provided")
 
     # Optional, so can be null
-    mode = config["QRMI_IBM_QRS_SESSION_MODE"]
+    mode = config["QRMI_IBM_QCS_SESSION_MODE"]
 
     return token, crn
 
@@ -480,7 +496,7 @@ def build_qrmi_vars_job(config, device):
             tmp = device + '_' + key
             os.environ[tmp] = str(val)
             os.environ.pop(key)
-    os.environ['QRMI_IBM_QRS_BEST_DEVICE'] = device
+    os.environ['QRMI_IBM_QCS_BEST_DEVICE'] = device
 
 def build_qrmi_vars_lsf(config, device):
     """
@@ -491,8 +507,10 @@ def build_qrmi_vars_lsf(config, device):
         lsf_var = lsf_var + device + '_' + key + '=' + val + ','
     if debug:
         lsf_var = lsf_var + 'LSF_QRMI_DEBUG=' + debug + ','
-    # Add IBM_QRS_BEST_DEVICE variable
-    lsf_var = lsf_var + 'QRMI_IBM_QRS_BEST_DEVICE=' + device + '"'
+    # Add IBM_QCS_BEST_DEVICE variable
+    lsf_var = lsf_var + 'QRMI_IBM_QCS_BEST_DEVICE=' + device + '"'
+
+    print_debug("QRMI variables to write:", lsf_var)
 
     mod_file = os.environ.get('LSB_SUB_MODIFY_FILE')
     if not mod_file:
@@ -532,42 +550,47 @@ def transfer_vars_lsf(config, requests):
 
 def read_config_from_env():
     """
-    Build QRMI environment variables for jobs
+    Build QRMI environment variables for jobs. 
+    Note that "QCS" variables are for QPUs on IBM Quantum Platform.
+    See QRMI documentation for other platforms.
     """
     config = {}
 
-    api_key = os.getenv("QRMI_IBM_QRS_IAM_APIKEY")
+    api_key = os.getenv("QRMI_IBM_QCS_IAM_APIKEY")
     if not api_key:
-        print_error("No QRMI_IBM_QRS_IAM_APIKEY provided")
-    config.update({"QRMI_IBM_QRS_IAM_APIKEY": api_key})
+        print_error("No QRMI_IBM_QCS_IAM_APIKEY provided")
+    config.update({"QRMI_IBM_QCS_IAM_APIKEY": api_key})
 
-    crn = os.getenv("QRMI_IBM_QRS_SERVICE_CRN")
+    crn = os.getenv("QRMI_IBM_QCS_SERVICE_CRN")
     if not crn:
-        print_error("No QRMI_IBM_QRS_SERVICE_CRN provided")
-    config.update({"QRMI_IBM_QRS_SERVICE_CRN": crn})
+        print_error("No QRMI_IBM_QCS_SERVICE_CRN provided")
+    config.update({"QRMI_IBM_QCS_SERVICE_CRN": crn})
 
-    qrs_endpoint = os.getenv("QRMI_IBM_QRS_ENDPOINT")
+    qrs_endpoint = os.getenv("QRMI_IBM_QCS_ENDPOINT")
     if not qrs_endpoint:
-        print_error("No QRMI_IBM_QRS_ENDPOINT provided")
-    config.update({"QRMI_IBM_QRS_ENDPOINT": qrs_endpoint})
+        print_error("No QRMI_IBM_QCS_ENDPOINT provided")
+    config.update({"QRMI_IBM_QCS_ENDPOINT": qrs_endpoint})
 
-    iam_endpoint = os.getenv("QRMI_IBM_QRS_IAM_ENDPOINT")
+    iam_endpoint = os.getenv("QRMI_IBM_QCS_IAM_ENDPOINT")
     if not iam_endpoint:
-        print_error("No QRMI_IBM_QRS_IAM_ENDPOINT provided")
-    config.update({"QRMI_IBM_QRS_IAM_ENDPOINT": iam_endpoint})
+        print_error("No QRMI_IBM_QCS_IAM_ENDPOINT provided")
+    config.update({"QRMI_IBM_QCS_IAM_ENDPOINT": iam_endpoint})
 
     # Optional, so can be null
-    mode = os.getenv("QRMI_IBM_QRS_SESSION_MODE")
+    mode = os.getenv("QRMI_IBM_QCS_SESSION_MODE")
     if mode:
-        config.update({"QRMI_IBM_QRS_SESSION_MODE": mode})
+        config.update({"QRMI_IBM_QCS_SESSION_MODE": mode})
 
-    user_qubits = os.getenv("ESUB_USER_REQ_QUBITS")
-    if not user_qubits:
-        print_error("No ESUB_USER_REQ_QUBITS provided")
-    config.update({"ESUB_USER_REQ_QUBITS": user_qubits})
+    #user_qubits = os.getenv("ESUB_USER_REQ_QUBITS")
+    #if not user_qubits:
+    #    print_error("No ESUB_USER_REQ_QUBITS provided")
+    #config.update({"ESUB_USER_REQ_QUBITS": user_qubits})
 
     device_selector = os.getenv("ESUB_USER_REQ_SELECTOR")
     config.update({"ESUB_USER_REQ_SELECTOR": device_selector})
+
+    req_device = os.getenv("ESUB_USER_REQ_DEVICE")
+    config.update({"ESUB_USER_REQ_DEVICE": req_device})
 
     return config
 
@@ -584,24 +607,20 @@ identity = os.path.basename(sys.argv[0]).removesuffix('.qrmi')
 if identity != 'esub' and identity != 'jobstarter':
     print_error("Unknown identity")
 
+esub_abort_val = os.environ.get("LSB_SUB_ABORT_VALUE")
 
 # Do what esub is supposed to do.
 if identity == "esub":
+
     # Parse the command line
     config = parse_config()
-    # Read config file
+
     creds = read_config_file(config.file)
     if not creds:
         print_error("Cannot read credentials file {credentials_file.name}")
 
-    # If device name is provided by a user, just use it verbatim.
-    if config.device:
-        build_qrmi_vars_lsf(creds, config.device)
-        print_debug("Created QRMI variables using device", args.device)
-    else:
-        # Pass creds and resources request to a jobstarter
-        transfer_vars_lsf(creds, vars(config))
-        print_debug("Passed creds and requests to a jobstarter.")
+    transfer_vars_lsf(creds, vars(config))
+    print_debug("Passed creds and requests to a jobstarter.")
 
     exit(0)
 else:
@@ -614,6 +633,16 @@ else:
 
 # Build QRMI environment vars for LSF
 config = read_config_from_env()
+
+#print(config, file=sys.stderr)
+
+device=config["ESUB_USER_REQ_DEVICE"]
+if device != None:
+    # Set {device}_QRMI variables for a job
+    build_qrmi_vars_job(config, device)
+    # Launch the job
+    subprocess.run(job_args)
+    sys.exit(0)
 
 # Get QRMI environment variables templates
 token, crn = read_env_vars_from_config(config)
