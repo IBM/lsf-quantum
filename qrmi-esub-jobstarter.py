@@ -60,7 +60,31 @@ def print_error(message):
     else:    
         sys.exit(1)
 
+def print_help() -> None:
+    print("Usage:")
+    print("  esub.qrmi arguments")
+    print("  esub.qrmi -h | --help")
+    print()
 
+    print("""Arguments syntax:
+            file=<filename>,
+            device=<device_name>|qpu.<attribute>=<value>,..,qpu.<attribute>=<value>,
+            [selector=basic|health|priority]
+    """)
+
+    print("Arguments description:")
+    print("  file                       Path to REST API credentials")
+    print("  device                     QPU name")
+    print("  qpu.qubits                 Minimum number of qubits")
+    print("  qpu.processor_type         Required processor family")
+    print("  qpu.clops                  Minimum CLOPS value")
+    print("  qpu.t1_median_us           T1 median on QPU")
+    print("  qpu.t2_median_us           T2 median on QPU")
+    print("  qpu.cz_error_median        Median CZ error on QPU  ")
+    print("  qpu.sx_error_median        Median SX error on QPU  ")
+    print("  qpu.readout_error_median   Median readout error on QPU ")
+    print()
+    print("Note: device and qpu arguments are mutually exclusive")
 
 # Priority-based QPU selection algorithm
 
@@ -2211,6 +2235,10 @@ esub_abort_val = os.environ.get("LSB_SUB_ABORT_VALUE")
 
 # Do what esub is supposed to do.
 if identity == "esub":
+
+    if len(sys.argv) == 1 or sys.argv[1] in ("-h", "--help"):
+        print_help()
+        exit(0)
 
     # Parse the command line
     config = parse_config()
