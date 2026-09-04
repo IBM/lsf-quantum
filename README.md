@@ -18,15 +18,20 @@ Figure 1 depicts workflow of an LSF job submission using `esub.qrmi` and `jobsta
 - Account on ![IBM Quantum Platform](https://quantum.ibm.com/) with generated API key and a CRN number.
 
 ## Deploying esub and jobstarter
-Install dependencies, assuming that Python 3.11 (or later) is already available.
+Follow these steps as _root_.
 
-On Rocky Linux 9.x, as root:
+1. Install dependencies, assuming that Python 3.11 (or later) is already available.
+
+For example, on Rocky Linux 9.x:
 ```
 dnf install python3.11-pip
-pip-3 install requests dotenv omegaconf
+pip-3 install requests dotenv omegaconf 
 ```
-As _root_ install `esub` and `jobstarter`:
+
+2. Add `esub.qrmi and jobstarter.qrmi` to the existing LSF cluster. 
 ```
+git clone git@github.com:IBM/lsf-quantum.git
+cd lsf-quantum
 cp qrmi-esub-jobstarter.py $LSF_SERVERDIR
 chmod a+xr $LSF_SERVERDIR/qrmi-esub-jobstarter.py
 ln -s $LSF_SERVERDIR/qrmi-esub-jobstarter.py $LSF_SERVERDIR/esub.qrmi
@@ -38,6 +43,15 @@ JOB_STARTER = /opt/lsf/10.1/linux3.10-glibc2.17-x86_64/etc/jobstarter.qrmi
 ```
 
 ## Using esub.qrmi
+
+### Configuring user environment
+Create a virtual environment, for example
+```
+conda create -n lsfqrmi python==3.11
+conda activate lsfqrmi
+pip install qrmi dotenv omegaconf requests
+```
+### Submitting jobs
 ```
 Usage:
   esub.qrmi arguments
