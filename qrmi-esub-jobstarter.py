@@ -21,14 +21,17 @@ from dotenv import dotenv_values
 from operator import itemgetter
 from dataclasses import dataclass, fields
 from pathlib import Path
-from typing import Optional
 from omegaconf import MISSING, OmegaConf
 from statistics import median
 from typing import Any
 from pprint import pprint
+import math
+import operator
+import re
+from typing import Any, Callable, Mapping, Optional
 
-# Helpers
 
+# Helpers for printing errors and debug messages
 def print_debug(message, var=None):
     """
     Print message to stderr
@@ -57,9 +60,446 @@ def print_error(message):
     else:    
         sys.exit(1)
 
+
+
+# Priority-based QPU selection algorithm
+
+# Metrics where a larger value is better.
+MAXIMIZE_METRICS = {
+    "qubits",
+    "clops",
+    "T1_median_us",
+    "T2_median_us",
+}
+
+# Metrics where a smaller value is better.
+MINIMIZE_METRICS = {
+    "pending_jobs",
+    "readout_error_median",
+    "sx_error_median",
+    "cz_error_median",
+}
+
+
+@dataclass(frozen=True)
+class Requirement:
+    attribute: str
+    comparison: str
+    value: Any
+    priority: int
+
+
+REQUIREMENT_PATTERN = re.compile(
+    r"""
+    ^\s*
+    (?P<attribute>[A-Za-z_][A-Za-z0-9_.]*)
+    \s*
+    (?P<operator>>=|<=|==|!=|>|<|=)
+    \s*
+    (?P<value>.+?)
+    \s*$
+    """,
+    re.VERBOSE,
+)
+
+
+COMPARISON_OPERATORS: dict[
+    str,
+    Callable[[Any, Any], bool],
+] = {
+    "==": operator.eq,
+    "!=": operator.ne,
+    ">": operator.gt,
+    ">=": operator.ge,
+    "<": operator.lt,
+    "<=": operator.le,
+}
+
+
+def _parse_requirement_value(value: str) -> Any:
+    """Parse a requirement value into an appropriate Python type."""
+    value = value.strip()
+
+    if (
+        len(value) >= 2
+        and value[0] == value[-1]
+        and value[0] in {"'", '"'}
+    ):
+        return value[1:-1]
+
+    lowered = value.lower()
+
+    if lowered in {"none", "null"}:
+        return None
+
+    if lowered == "true":
+        return True
+
+    if lowered == "false":
+        return False
+
+    try:
+        return int(value)
+    except ValueError:
+        pass
+
+    try:
+        return float(value)
+    except ValueError:
+        return value
+
+
+def _metric_name(attribute: str) -> str:
+    """
+    Return the top-level metric name.
+
+    Example:
+        processor_type.family -> processor_type
+    """
+    return attribute.split(".", maxsplit=1)[0]
+
+
+def _comparison_for_equals(
+    attribute: str,
+    value: Any,
+) -> str:
+    """
+    Interpret a single '=' according to the metric direction.
+
+    Examples:
+        qubits=156 means qubits >= 156
+        clops=100 means clops >= 100
+        pending_jobs=10 means pending_jobs <= 10
+        processor_type.family=Heron means exact equality
+    """
+    metric = _metric_name(attribute)
+
+    is_numeric = (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+    )
+
+    if is_numeric and metric in MAXIMIZE_METRICS:
+        return ">="
+
+    if is_numeric and metric in MINIMIZE_METRICS:
+        return "<="
+
+    return "=="
+
+
+def _parse_requirements(
+    requirements: str,
+    ) -> list:
+    """Parse semicolon-separated requirements in priority order."""
+    parsed: list[Requirement] = []
+
+    for priority, expression in enumerate(
+        requirements.split(";")
+    ):
+        expression = expression.strip()
+
+        if not expression:
+            continue
+
+        match = REQUIREMENT_PATTERN.fullmatch(expression)
+
+        if match is None:
+            raise ValueError(
+                f"Invalid requirement: {expression!r}. "
+                "Expected forms such as 'qubits=156', "
+                "'clops>=100', or "
+                "'processor_type.family=Heron'."
+            )
+
+        attribute = match.group("attribute")
+        comparison = match.group("operator")
+        value = _parse_requirement_value(
+            match.group("value")
+        )
+
+        if comparison == "=":
+            comparison = _comparison_for_equals(
+                attribute,
+                value,
+            )
+
+        parsed.append(
+            Requirement(
+                attribute=attribute,
+                comparison=comparison,
+                value=value,
+                priority=priority,
+            )
+        )
+
+    if not parsed:
+        raise ValueError(
+            "The requirements string contains no requirements"
+        )
+
+    return parsed
+
+
+def _get_metric_value(
+    metrics: Mapping[str, Any],
+    attribute: str,
+) -> Any:
+    """
+    Retrieve a value using a dotted attribute path.
+
+    Examples:
+        qubits
+        processor_type.family
+        processor_type.revision
+    """
+    value: Any = metrics
+
+    for part in attribute.split("."):
+        if not isinstance(value, Mapping):
+            return None
+
+        if part not in value:
+            return None
+
+        value = value[part]
+
+    if (
+        isinstance(value, str)
+        and value.strip().lower()
+        in {"", "none", "null", "n/a", "unavailable"}
+    ):
+        return None
+
+    return value
+
+
+def _is_numeric(value: Any) -> bool:
+    """Return True if value is a finite numeric value."""
+    if isinstance(value, bool):
+        return False
+
+    if not isinstance(value, (int, float)):
+        return False
+
+    return math.isfinite(float(value))
+
+
+def _satisfies_requirement(
+    actual_value: Any,
+    requirement: Requirement,
+) -> bool:
+    """Return whether a metric satisfies a requirement."""
+    required_value = requirement.value
+
+    if actual_value is None or required_value is None:
+        if requirement.comparison == "==":
+            return actual_value is required_value
+
+        if requirement.comparison == "!=":
+            return actual_value is not required_value
+
+        return False
+
+    if (
+        _is_numeric(actual_value)
+        and _is_numeric(required_value)
+    ):
+        actual_value = float(actual_value)
+        required_value = float(required_value)
+
+    elif (
+        isinstance(actual_value, str)
+        and isinstance(required_value, str)
+    ):
+        actual_value = actual_value.casefold()
+        required_value = required_value.casefold()
+
+    comparison_function = COMPARISON_OPERATORS[
+        requirement.comparison
+    ]
+
+    try:
+        return bool(
+            comparison_function(
+                actual_value,
+                required_value,
+            )
+        )
+    except TypeError:
+        return False
+
+
+def _keep_best_candidates(
+    candidates: dict[str, dict[str, Any]],
+    requirement: Requirement,
+) -> dict[str, dict[str, Any]]:
+    """
+    Sort candidates by the current requested attribute and keep
+    all candidates tied at the best value.
+    """
+    metric = _metric_name(requirement.attribute)
+
+    if metric in MAXIMIZE_METRICS:
+        maximize = True
+    elif metric in MINIMIZE_METRICS:
+        maximize = False
+    else:
+        # Categorical attributes do not have a ranking.
+        # Keep all matching candidates for the next requirement.
+        return candidates
+
+    candidate_values: dict[str, float] = {}
+
+    for device_name, metrics in candidates.items():
+        value = _get_metric_value(
+            metrics,
+            requirement.attribute,
+        )
+
+        if _is_numeric(value):
+            candidate_values[device_name] = float(value)
+
+    if not candidate_values:
+        return {}
+
+    if maximize:
+        best_value = max(candidate_values.values())
+    else:
+        best_value = min(candidate_values.values())
+
+    return {
+        device_name: candidates[device_name]
+        for device_name, value in candidate_values.items()
+        if math.isclose(
+            value,
+            best_value,
+            rel_tol=1e-12,
+            abs_tol=1e-15,
+        )
+    }
+
+
+def select_device_priority(
+    backend_metrics: Mapping[
+        str,
+        Mapping[str, Any],
+    ],
+    requirements: str,
+) -> tuple[str, dict[str, Any]] | None:
+    """
+    Select a backend according to prioritized user requirements.
+
+    backend_metrics must have the structure returned by
+    get_all_backend_metrics_rest():
+
+        {
+            "ibm_backend_name": {
+                "qubits": 156,
+                "clops": 100.0,
+                "pending_jobs": 3,
+                ...
+            },
+            ...
+        }
+
+    Requirements are processed in appearance order:
+
+        "qubits=156;clops=100.0;pending_jobs=10"
+
+    Single '=' semantics:
+
+        qubits=156
+            means qubits >= 156
+
+        clops=100.0
+            means clops >= 100.0
+
+        pending_jobs=10
+            means pending_jobs <= 10
+
+        readout_error_median=0.02
+            means readout_error_median <= 0.02
+
+        processor_type.family=Heron
+            means exact equality
+
+    Use '==' for exact numeric equality:
+
+        "qubits==156"
+
+    Algorithm:
+
+        1. Start with every available backend.
+        2. Process requirements in their string order.
+        3. Remove backends that do not satisfy the current requirement.
+        4. Among satisfying backends, retain those tied at the best value.
+        5. Continue with the next requirement.
+        6. If multiple backends remain, select by backend name.
+
+    Returns:
+
+        (backend_name, backend_metrics)
+
+    Returns None when no backend satisfies the requirements.
+    """
+    parsed_requirements = _parse_requirements(
+        requirements
+    )
+    print(f"Parsed requirements: {parsed_requirements}", file=sys.stderr)
+
+    candidates: dict[str, dict[str, Any]] = {
+        str(backend_name): dict(metrics)
+        for backend_name, metrics
+        in backend_metrics.items()
+        if isinstance(metrics, Mapping)
+        and "error" not in metrics
+    }
+
+    if not candidates:
+        return None
+
+    for requirement in parsed_requirements:
+        satisfying_candidates: dict[
+            str,
+            dict[str, Any],
+        ] = {}
+
+        for backend_name, metrics in candidates.items():
+            actual_value = _get_metric_value(
+                metrics,
+                requirement.attribute,
+            )
+
+            if _satisfies_requirement(
+                actual_value,
+                requirement,
+            ):
+                satisfying_candidates[backend_name] = metrics
+
+        if not satisfying_candidates:
+            return None
+
+        candidates = _keep_best_candidates(
+            satisfying_candidates,
+            requirement,
+        )
+
+        if not candidates:
+            return None
+
+        if len(candidates) == 1:
+            break
+
+    # Deterministic final tie-break.
+    selected_backend_name = min(candidates)
+
+    return (
+        selected_backend_name,
+        candidates[selected_backend_name],
+    )
+
 # QPU metrics extraction
-
-
 NULL_STRINGS = {
     "",
     "none",
@@ -1108,47 +1548,344 @@ def get_all_backend_metrics_rest(
 
     return result
 
-def select_device_priority(user_request, devices_status, devices_config):
-    """
-    Device selection algorithm based on request priority
 
-    qubits 	Number of qubits on QPU
-    qpu_version 	QPU version
-    processor_type 	QPU processor type
-    clops 	QPU hardware-aware circuit layer operations per second
-    pending_jobs 	Pending jobs on QPU
-    readout_error_median 	Median readout error on QPU
-    sx_error_median 	Median SX error on QPU
-    cz_error_median 	Median CZ error on QPU
-    T1_median_us 	T1 median on QPU
-    T2_median_us 	T2 median on QPU
+def select_device_priority(backend_metrics, user_request):
     """
-    config_map = {}
-    for element in devices_config:
-        name          = element.get('device')
-        qpu_version = element.get('qpu_version')
-        qpu_type = element.get('processor_type')
-        n_qubits      = element.get('n_qubits')
-        t1_us         = element.get('T1_median_µs')   
-        t2_us         = element.get('T2_median_µs')   
-        clops = element.get('clops')
-        readout_error = element.get('pending_jobs')
-        sx_error = element.get('sx_error_median')
-        cz_error = element.get('cz_error_median')
-        if name:
-            config_map[name] = {
-                'n_qubits':      n_qubits,
-                't1_us':         t1_us,
-                't2_us':         t2_us,
-                'readout_error': readout_error,
-                'clops': clops,
-                'cz_error': cz_error,
-                'sx_error': sx_error,
-                'qpu_type': qpu_type,
-                'qpu_version': qpu_version,
+    Select a backend according to ordered user requirements.
+
+    Example:
+        qubits=120;processor_type=Nighthawk;clops=240000.0
+
+    A single "=" means:
+        qubits=120              -> qubits >= 120
+        clops=240000            -> clops >= 240000
+        T1_median_us=100        -> T1_median_us >= 100
+        T2_median_us=100        -> T2_median_us >= 100
+        pending_jobs=10         -> pending_jobs <= 10
+        readout_error_median=x  -> readout_error_median <= x
+        sx_error_median=x       -> sx_error_median <= x
+        cz_error_median=x       -> cz_error_median <= x
+        processor_type=value    -> processor_type["family"] == value
+
+    Algorithm:
+
+    1. Start with every available backend.
+    2. Extract requirements while preserving their string order.
+    3. Apply each requirement as a constraint.
+    4. Retain every backend satisfying the current constraint.
+    5. Stop and return no selection if no candidates remain.
+    6. Continue until all requirements have been processed.
+    7. If multiple candidates remain, rank them lexicographically using
+       the requested metrics in priority order.
+    8. If candidates remain tied, select deterministically by backend name.
+
+    Returns:
+        (backend_name, backend_metrics)
+
+    Returns:
+        None if no backend satisfies all requirements.
+    """
+
+    maximize_metrics = {
+        "qubits",
+        "clops",
+        "T1_median_us",
+        "T2_median_us",
+    }
+
+    minimize_metrics = {
+        "pending_jobs",
+        "readout_error_median",
+        "sx_error_median",
+        "cz_error_median",
+    }
+
+    operators = (
+        ">=",
+        "<=",
+        "==",
+        "!=",
+        ">",
+        "<",
+        "=",
+    )
+
+    def normalize(value):
+        if isinstance(value, str):
+            value = value.strip()
+
+            if value.lower() in {
+                "",
+                "none",
+                "null",
+                "n/a",
+                "unavailable",
+            }:
+                return None
+
+        return value
+
+    def parse_value(text):
+        text = text.strip()
+
+        if (
+            len(text) >= 2
+            and text[0] == text[-1]
+            and text[0] in {"'", '"'}
+        ):
+            return text[1:-1]
+
+        lowered = text.lower()
+
+        if lowered in {"none", "null"}:
+            return None
+
+        if lowered == "true":
+            return True
+
+        if lowered == "false":
+            return False
+
+        try:
+            return int(text)
+        except ValueError:
+            pass
+
+        try:
+            return float(text)
+        except ValueError:
+            return text
+
+    def is_number(value):
+        return (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+        )
+
+    def get_metric(metrics, attribute):
+        current = metrics
+
+        for part in attribute.split("."):
+            if not isinstance(current, dict):
+                return None
+
+            if part not in current:
+                return None
+
+            current = current[part]
+
+        if (
+            attribute == "processor_type"
+            and isinstance(current, dict)
+        ):
+            current = current.get("family")
+
+        return normalize(current)
+
+    def parse_requirement(expression):
+        expression = expression.strip()
+
+        for requested_operator in operators:
+            if requested_operator not in expression:
+                continue
+
+            attribute, raw_value = expression.split(
+                requested_operator,
+                1,
+            )
+
+            attribute = attribute.strip()
+            raw_value = raw_value.strip()
+
+            if not attribute:
+                raise ValueError(
+                    "Missing attribute in requirement: "
+                    + repr(expression)
+                )
+
+            if not raw_value:
+                raise ValueError(
+                    "Missing value in requirement: "
+                    + repr(expression)
+                )
+
+            value = parse_value(raw_value)
+            metric_name = attribute.split(".", 1)[0]
+            comparison = requested_operator
+
+            if comparison == "=":
+                if (
+                    metric_name in maximize_metrics
+                    and is_number(value)
+                ):
+                    comparison = ">="
+
+                elif (
+                    metric_name in minimize_metrics
+                    and is_number(value)
+                ):
+                    comparison = "<="
+
+                else:
+                    comparison = "=="
+
+            return {
+                "attribute": attribute,
+                "operator": comparison,
+                "value": value,
             }
 
-    print(config_map, file=sys.stderr)
+        raise ValueError(
+            "Invalid requirement: " + repr(expression)
+        )
+
+    def satisfies(actual, comparison, required):
+        actual = normalize(actual)
+        required = normalize(required)
+
+        if actual is None or required is None:
+            if comparison == "==":
+                return actual is required
+
+            if comparison == "!=":
+                return actual is not required
+
+            return False
+
+        if is_number(actual) and is_number(required):
+            actual = float(actual)
+            required = float(required)
+
+        elif (
+            isinstance(actual, str)
+            and isinstance(required, str)
+        ):
+            actual = actual.casefold()
+            required = required.casefold()
+
+        try:
+            if comparison == "==":
+                return actual == required
+
+            if comparison == "!=":
+                return actual != required
+
+            if comparison == ">":
+                return actual > required
+
+            if comparison == ">=":
+                return actual >= required
+
+            if comparison == "<":
+                return actual < required
+
+            if comparison == "<=":
+                return actual <= required
+
+        except TypeError:
+            return False
+
+        raise ValueError(
+            "Unsupported operator: " + comparison
+        )
+
+    requirements = []
+
+    for expression in user_request.split(";"):
+        expression = expression.strip()
+
+        if expression:
+            requirements.append(
+                parse_requirement(expression)
+            )
+
+    if not requirements:
+        raise ValueError(
+            "The user request contains no requirements"
+        )
+
+    candidates = {}
+
+    for backend_name, metrics in backend_metrics.items():
+        if not isinstance(metrics, dict):
+            continue
+
+        if "error" in metrics:
+            continue
+
+        candidates[backend_name] = metrics
+
+    if not candidates:
+        return None
+
+    for requirement in requirements:
+        matching_candidates = {}
+
+        for backend_name, metrics in candidates.items():
+            actual_value = get_metric(
+                metrics,
+                requirement["attribute"],
+            )
+
+            if satisfies(
+                actual_value,
+                requirement["operator"],
+                requirement["value"],
+            ):
+                matching_candidates[backend_name] = metrics
+
+        candidates = matching_candidates
+
+        if not candidates:
+            return None
+
+    if len(candidates) == 1:
+        selected_name = next(iter(candidates))
+
+        return (
+            selected_name,
+            candidates[selected_name],
+        )
+
+    def ranking_key(backend_name):
+        metrics = candidates[backend_name]
+        key = []
+
+        for requirement in requirements:
+            attribute = requirement["attribute"]
+            metric_name = attribute.split(".", 1)[0]
+            value = get_metric(metrics, attribute)
+
+            if metric_name in maximize_metrics:
+                if is_number(value):
+                    key.append((0, -float(value)))
+                else:
+                    key.append((1, 0.0))
+
+            elif metric_name in minimize_metrics:
+                if is_number(value):
+                    key.append((0, float(value)))
+                else:
+                    key.append((1, 0.0))
+
+            else:
+                key.append((0, 0.0))
+
+        key.append((0, backend_name))
+
+        return tuple(key)
+
+    selected_name = min(
+        candidates,
+        key=ranking_key,
+    )
+
+    return (
+        selected_name,
+        candidates[selected_name],
+    )
+
+
 
 def select_device_default(req_qubits, devices_status, devices_config):
     """
@@ -1441,6 +2178,22 @@ def read_config_from_env():
 
     return config
 
+def extract_qubits(user_request: str) -> int | None:
+    for item in user_request.split(";"):
+        key, separator, value = item.partition("=")
+
+        if separator and key.strip().lower() == "qubits":
+            try:
+                return int(value.strip())
+            except ValueError as error:
+                raise ValueError(
+                    f"Invalid qubits value: {value!r}"
+                ) from error
+
+    return None
+
+
+
 #-----------------------------------------------------
 # Main starts here
 #-----------------------------------------------------
@@ -1480,8 +2233,7 @@ else:
 
 # Build QRMI environment vars for LSF
 config = read_config_from_env()
-
-print(config, file=sys.stderr)
+#print(config, file=sys.stderr)
 
 # If user wants a specific device, just use it. 
 device = config["ESUB_USER_REQ_DEVICE"]
@@ -1494,40 +2246,9 @@ if device is not None:
     subprocess.run(job_args)
     sys.exit(0)
 
-# Get QRMI environment variables templates
+# Get IAM access token
 token, crn = read_env_vars_from_config(config)
 print_debug("Obtained authentication token and CRN")
-
-# Get available devices.
-devices = get_avail_devices(token, crn)
-if not devices:
-    print_error("No quantum devices found.")
-print_debug("Devices: ", devices['devices'])
-
-# Get status of each available device.
-devices_status = get_device_topology(token, devices, "status")
-if not devices_status:
-    print_error("No status of quantum devices.")
-print_debug("Status: ", devices_status)
-
-# Get attributes from  each device.
-#devices_config = get_device_topology(token, devices, "configuration")
-#if not devices_config:
-#    print_error("No configuration of quantum devices.")
-#if debug == 'level2':
-#    print_debug("Configuration: ", devices_config)
-
-backend_metrics = get_all_backend_metrics_rest(
-    access_token=token,
-    service_crn=crn,
-)
-
-pprint(
-    backend_metrics,
-    sort_dicts=False,
-    stream=sys.stderr
-)
-exit(0)
 
 # Select best device for a job 
 selector = config['ESUB_USER_REQ_SELECTOR']
@@ -1543,28 +2264,77 @@ try:
     select_device = selectors[selector]
 except KeyError:
     print_error(f"Unknown selector: {selector}")
-    raise SystemExit(2)
+    raise SystemExit(1)
 
 user_request = config['ESUB_USER_REQ_QPU']
-print(user_request, file=sys.stderr)
+print_debug("User request:", user_request)
+
 if selector == 'priority':
-    best_device = select_device(
-        user_request,
-        devices_status,
-        devices_config,
+    backend_metrics = get_all_backend_metrics_rest(
+        access_token=token,
+        service_crn=crn,
     )
+
+    if debug == 'level2':    
+        pprint(
+            backend_metrics,
+            sort_dicts=False,
+            stream=sys.stderr
+        )
+
+    selection = select_device(
+        backend_metrics,
+        user_request
+    )
+
+    if selection is None:
+        print_error("No backend satisfies the requirements")
+    else:
+        best_device, metrics = selection
+        print_debug("Selected backend:", best_device) 
+        if debug == 'level2':    
+            pprint(
+                metrics,
+                stream=sys.stderr,
+                sort_dicts=False,
+            )
 else:    
-    #qubits = int(config['ESUB_USER_REQ_QUBITS'])
+    # Original implementation
+    # Extract number of qubits from a user request
+    qubits = extract_qubits(user_request)
+
+    if qubits is None:
+        print_error("No qubits requirement was specified")
+    print_debug("Requested qubits", qubits)
+
+    # Get available devices.
+    devices = get_avail_devices(token, crn)
+    if not devices:
+        print_error("No quantum devices found.")
+    print_debug("Devices: ", devices['devices'])
+
+    # Get status of each available device.
+    devices_status = get_device_topology(token, devices, "status")
+    if not devices_status:
+        print_error("No status of quantum devices.")
+    print_debug("Status: ", devices_status)
+
+    # Get attributes from  each device.
+    devices_config = get_device_topology(token, devices, "configuration")
+    if not devices_config:
+       print_error("No configuration of quantum devices.")
+    if debug == 'level2':
+       print_debug("Configuration: ", devices_config)
+
     best_device = select_device(
         qubits,
         devices_status,
         devices_config,
     )
 
-sys.exit(0)
-if not best_device:
-    print_error("No suitable quantum device available.")
-print_debug("Best device: ", best_device)
+    if not best_device:
+        print_error("No suitable quantum device available.")
+    print_debug("Best device: ", best_device)
 
 # Set {device}_QRMI variables for a job
 build_qrmi_vars_job(config, best_device)
