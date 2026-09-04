@@ -8,7 +8,6 @@ This repository contains implementation of plugins for IBM LSF workload manager 
 
 ## Overview
 Figure 1 depicts workflow of an LSF job submission using `esub.qrmi` and `jobstarter.qrmi`. 
-to find the best suitable quantum device.
 
 ![LSF job submission](Figure_1.png) 
 
@@ -39,43 +38,50 @@ JOB_STARTER = /opt/lsf/10.1/linux3.10-glibc2.17-x86_64/etc/jobstarter.qrmi
 ```
 
 ## Using esub.qrmi
-`esub.qrmi` requires file name as a positional argument and either quantum device or number of qubits as options.
-
 ```
-$ ./esub.qrmi
-usage: esub.qrmi [-h] file qubits [device]
-esub.qrmi: error: the following arguments are required: file, qubits
+Usage:
+  esub.qrmi arguments
+  esub.qrmi -h | --help
+
+Arguments syntax:
+            file=<filename>,
+            device=<device_name>|qpu.<attribute>=<value>,..,qpu.<attribute>=<value>,
+            [selector=basic|health|priority]
+    
+Arguments description:
+  file                       Path to REST API credentials
+  device                     QPU name
+  qpu.qubits                 Minimum number of qubits
+  qpu.processor_type         Required processor family
+  qpu.clops                  Minimum CLOPS value
+  qpu.t1_median_us           T1 median on QPU
+  qpu.t2_median_us           T2 median on QPU
+  qpu.cz_error_median        Median CZ error on QPU  
+  qpu.sx_error_median        Median SX error on QPU  
+  qpu.readout_error_median   Median readout error on QPU 
+
+Note: device and qpu arguments are mutually exclusive
+
+``` 
+Submission examples:
 ```
+        bsub -a "qrmi(file=.env, qpu.qubits=120,qpu.processor_type=Nighthawk)" my_quantum_app
+        bsub -a "qrmi(file=.env, device=ibm_marrakesh)" my_quantum_app
+        bsub -a "qrmi(file=.env, qpu.qubits=120,selector=priority)" my_quantum_app
 ```
-$ ./esub.qrmi -h
-usage: esub.qrmi [-h] file qubits [device]
-
-esub.qrmi for IBM Spectrum LSF
-
-positional arguments:
-  file        File with user REST API creds
-  qubits      Number of qubits
-  device      Quantum device
-
-options:
-  -h, --help  show this help message and exit
-
-    Number of qubits is ignored when quantum device name is provided, 
-examples: 
-        bsub -a "qrmi(.env, 128)" my_quantum_app
-        bsub -a "qrmi(.env, 128, ibm_blue)" my_quantum_app
-
-note: export LSF_ESUB_QRMI_DEBUG=level1 enables debugging messages
+For debugging:
+```
+      export LSF_ESUB_QRMI_DEBUG=level1 enables debugging messages
       export LSF_ESUB_QRMI_DEBUG=level2 enables level1 and more 
 ```
-Before submitting any jobs prepare an file with template QRMI variables in your $CWD. Refer to ![IBM Quantum Platform documentation](https://quantum.cloud.ibm.com/docs/en/guides/cloud-setup) on how to cerate API key and CRN.
+Before submitting any jobs to the IBM Quantum Platform prepare an file with template QRMI variables in your $CWD. Refer to ![IBM Quantum Platform documentation](https://quantum.cloud.ibm.com/docs/en/guides/cloud-setup) on how to cerate API key and CRN.
 ```
 $ cat .env
-QRMI_IBM_QRS_IAM_APIKEY=<user_api_key>
-QRMI_IBM_QRS_SERVICE_CRN=<user_crn>
-QRMI_IBM_QRS_ENDPOINT="https://quantum.cloud.ibm.com/api/v1"
-QRMI_IBM_QRS_IAM_ENDPOINT="https://iam.cloud.ibm.com"
-QRMI_IBM_QRS_SESSION_MODE="batch"
+QRMI_IBM_QCS_IAM_APIKEY=<user_api_key>
+QRMI_IBM_QCS_SERVICE_CRN=<user_crn>
+QRMI_IBM_QCS_ENDPOINT="https://quantum.cloud.ibm.com/api/v1"
+QRMI_IBM_QCS_IAM_ENDPOINT="https://iam.cloud.ibm.com"
+QRMI_IBM_QCS_SESSION_MODE="batch"
 ```
 **Note: esub.qrm expects a short file name for QRMI templates and assumes that it is in $CWD.**
 
@@ -86,11 +92,11 @@ bsub -Is -a "qrmi(".env", 128)" /bin/bash
 Once the job is dispatched check for QRMI environment variables, for example
 ```
 $ env |grep QRMI
-ibm_kingston_QRMI_IBM_QRS_IAM_APIKEY=<user_api_key>
-ibm_kingston_QRMI_IBM_QRS_SERVICE_CRN=<user_crn>
-ibm_kingston_QRMI_IBM_QRS_ENDPOINT=https://quantum.cloud.ibm.com/api/v1
-ibm_kingston_QRMI_IBM_QRS_SESSION_MODE=batch
-ibm_kingston_QRMI_IBM_QRS_IAM_ENDPOINT=https://iam.cloud.ibm.com
+ibm_kingston_QRMI_IBM_QCS_IAM_APIKEY=<user_api_key>
+ibm_kingston_QRMI_IBM_QCS_SERVICE_CRN=<user_crn>
+ibm_kingston_QRMI_IBM_QCS_ENDPOINT=https://quantum.cloud.ibm.com/api/v1
+ibm_kingston_QRMI_IBM_QCS_SESSION_MODE=batch
+ibm_kingston_QRMI_IBM_QCS_IAM_ENDPOINT=https://iam.cloud.ibm.com
 QRMI_IBM_QRS_BEST_DEVICE=ibm_kingston
 ```
 **Note: QRMI_IBM_QRS_BEST_DEVICE is not usedby QRMI and is provided for conveniency.**
@@ -98,14 +104,14 @@ QRMI_IBM_QRS_BEST_DEVICE=ibm_kingston
 ### Quantum Device Selection
 User can choose different quantum device selection policy.  For example, 
 ```
-bsub -Is -a "qrmi(".env", 128)" run_example.sh
+bsub -Is -a "qrmi(file=".env",qpu.qbits=128)" run_example.sh
 ```
-uses a _default_ selector, which chooses the least busy device with at least 128 qubits.
+uses _basic_ selector, which chooses the least busy quantum device with at least 128 qubits.
 
 ```
-bsub -Is -a "qrmi(".env", 128, "health")" run_example.sh
+bsub -Is -a "qrmi(file=".env",qpu.qubits=128,selector=health)" run_example.sh
 ```
-uses a default _health_ selector, which chooses a device based on a composite health score using _T1_, _readout error_ and _queue depth_ attributes of each available device. 
+uses _health_ selector, which chooses a quantum device based on a composite health score using _T1_, _readout error_ and _queue depth_ attributes of each available device. 
 
 Here is the example of the health-based device selection:
 ```
@@ -118,11 +124,24 @@ Here is the example of the health-based device selection:
 [DEBUG] Device ibm_kingston: qubits=156 T1=0.0µs err=1.0000 queue=475 → score=0.0000
 [DEBUG] Selected ibm_pittsburgh with health score 0.0000
 [DEBUG] Best device:  ibm_pittsburgh
+```
 
 ```
+bsub -Is -a "qrmi(file=".env",qpu.qubits=128,selector=priority)" run_example.sh
+```
+uses _priority_ selector, which chooses a quantum device using the following algorithm:
+
+        1. Start with every available backend.
+        2. Process requirements in their string order.
+        3. Remove backends that do not satisfy the current requirement.
+        4. Among satisfying backends, retain those tied at the best value.
+        5. Continue with the next requirement.
+        6. If multiple backends remain, select by backend name.
+
+
 Alternatively, if you want to use a particular quantum device:
 ```
-bsub -Is -a "qrmi(".env", ibm_sherbrook)" run_example.sh
+bsub -Is -a "qrmi(file=".env", device=ibm_sherbrook)" run_example.sh
 ```
 **Note: when device name is explicitly asked for, it is taken at face value and no checks for the device availability are made.**
 
