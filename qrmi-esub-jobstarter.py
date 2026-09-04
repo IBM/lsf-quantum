@@ -258,9 +258,8 @@ def _parse_requirements(
         )
 
     if not parsed:
-        raise ValueError(
-            "The requirements string contains no requirements"
-        )
+       print_error("The requirements string contains no requirements")
+        
 
     return parsed
 
@@ -1722,13 +1721,13 @@ def select_device_priority(backend_metrics, user_request):
             raw_value = raw_value.strip()
 
             if not attribute:
-                raise ValueError(
+                print_error(
                     "Missing attribute in requirement: "
                     + repr(expression)
                 )
 
             if not raw_value:
-                raise ValueError(
+                print_error(
                     "Missing value in requirement: "
                     + repr(expression)
                 )
@@ -1824,7 +1823,7 @@ def select_device_priority(backend_metrics, user_request):
             )
 
     if not requirements:
-        raise ValueError(
+        print_error(
             "The user request contains no requirements"
         )
 
