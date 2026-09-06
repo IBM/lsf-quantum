@@ -14,7 +14,7 @@ Figure 1 depicts workflow of an LSF job submission using `esub.qrmi` and `jobsta
 
 
 ## Prerequisites
-- Working ![IBM Spectrum LSF Suites](https://www.ibm.com/products/hpc-workload-management)  or ![LSF-CE](https://www.ibm.com/docs/en/cloud-private/3.2.x?topic=paks-spectrum-lsf-community-edition) cluster.
+- Working ![IBM Spectrum LSF Suites](https://www.ibm.com/products/hpc-workload-management)  or ![LSF-CE]([https://www.ibm.com/docs/en/cloud-private/3.2.x?topic=paks-spectrum-lsf-community-edition](https://early-access.ibm.com/software/support/trial/cst/programwebsite.wss?siteId=680&h=null&p=null&_gl=1*6kyz59*_ga*OTI4NDA0MTI1LjE3ODE4NzI0MTU.*_ga_FYECCCS21D*czE3ODg3MDA4MzYkbzE1JGcxJHQxNzg4NzAwODY4JGoyOCRsMCRoMA..)) cluster.
 - Account on ![IBM Quantum Platform](https://quantum.ibm.com/) with generated API key and a CRN number.
 
 ## Deploying esub and jobstarter
