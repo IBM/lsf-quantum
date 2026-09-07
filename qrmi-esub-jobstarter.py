@@ -2367,6 +2367,5 @@ else:
 # Set {device}_QRMI variables for a job
 build_qrmi_vars_job(config, best_device)
 
-# Launch the job
-subprocess.run(job_args)
-exit(0)
+# Launch the job and propagate its return code
+sys.exit(subprocess.run(job_args).returncode)
