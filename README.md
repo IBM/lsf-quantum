@@ -96,6 +96,7 @@ QRMI_IBM_QCS_SERVICE_CRN=<user_crn>
 QRMI_IBM_QCS_ENDPOINT="https://quantum.cloud.ibm.com/api/v1"
 QRMI_IBM_QCS_IAM_ENDPOINT="https://iam.cloud.ibm.com"
 QRMI_IBM_QCS_SESSION_MODE="batch"
+QRMI_JOB_QPU_TYPES="ibm-quantum-compute-service"
 ```
 **Note: esub.qrm expects a short file name for QRMI templates and assumes that it is in $CWD.**
 

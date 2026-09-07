@@ -2092,10 +2092,13 @@ def build_qrmi_vars_job(config, device):
     """
     for key, val in config.items():
         if 'QRMI' in key:
+            if key == 'QRMI_JOB_QPU_TYPES':
+                continue
             tmp = device + '_' + key
             os.environ[tmp] = str(val)
             os.environ.pop(key)
     os.environ['QRMI_IBM_QCS_BEST_DEVICE'] = device
+    os.environ['QRMI_JOB_QPU_RESOURCES'] = device
 
 def build_qrmi_vars_lsf(config, device):
     """
@@ -2185,11 +2188,6 @@ def read_config_from_env():
     if mode:
         config.update({"QRMI_IBM_QCS_SESSION_MODE": mode})
 
-    #user_qubits = os.getenv("ESUB_USER_REQ_QUBITS")
-    #if not user_qubits:
-    #    print_error("No ESUB_USER_REQ_QUBITS provided")
-    #config.update({"ESUB_USER_REQ_QUBITS": user_qubits})
-
     device_selector = os.getenv("ESUB_USER_REQ_SELECTOR")
     config.update({"ESUB_USER_REQ_SELECTOR": device_selector})
 
@@ -2198,6 +2196,9 @@ def read_config_from_env():
 
     req_qpu = os.getenv("ESUB_USER_REQ_QPU", None)
     config.update({"ESUB_USER_REQ_QPU": req_qpu})
+
+    qrmi_job_type = os.getenv("QRMI_JOB_QPU_TYPES", None)
+    config.update({"QRMI_JOB_QPU_TYPES": qrmi_job_type})
 
     return config
 
