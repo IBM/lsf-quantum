@@ -2086,6 +2086,39 @@ def select_device_health(req_qubits, devices_status, devices_config):
 #devices_defaults = get_device_topology(token, devices, "defaults")
 #-------------------------------------------------------------------------
 
+def build_quantum_resource(device):
+    """Build the QRMI resource for the selected IBM Quantum backend."""
+    from qrmi import QuantumResource, ResourceType
+
+    return QuantumResource(
+        device,
+        ResourceType.IBMQuantumComputeService,
+    )
+
+
+def acquire_quantum_resource(resource, device):
+    """Acquire the selected QRMI resource and export its acquisition token."""
+    token = resource.acquire()
+    os.environ[f"{device}_QRMI_JOB_ACQUISITION_TOKEN"] = token
+    return token
+
+
+def release_quantum_resource(resource, device, token):
+    """Release the QRMI resource and remove its acquisition token."""
+    try:
+        resource.release(token)
+    except Exception as error:
+        print(
+            f"Failed to release QRMI resource {device}: {error}",
+            file=sys.stderr,
+        )
+    finally:
+        os.environ.pop(
+            f"{device}_QRMI_JOB_ACQUISITION_TOKEN",
+            None,
+        )
+
+
 def build_qrmi_vars_job(config, device):
     """
     Build QRMI environment variables with device for a job
@@ -2270,8 +2303,20 @@ if isinstance(device, str) and device.strip().lower() in {"none", "null", ""}:
 if device is not None:
     # Set {device}_QRMI variables for a job
     build_qrmi_vars_job(config, device)
-    # Launch the job
-    subprocess.run(job_args)
+
+    resource = build_quantum_resource(device)
+    acquisition_token = acquire_quantum_resource(resource, device)
+
+    try:
+        # Launch the job
+        subprocess.run(job_args)
+    finally:
+        release_quantum_resource(
+            resource,
+            device,
+            acquisition_token,
+        )
+
     sys.exit(0)
 
 # Get IAM access token
@@ -2367,5 +2412,21 @@ else:
 # Set {device}_QRMI variables for a job
 build_qrmi_vars_job(config, best_device)
 
-# Launch the job and propagate its return code
-sys.exit(subprocess.run(job_args).returncode)
+resource = build_quantum_resource(best_device)
+
+acquisition_token = acquire_quantum_resource(
+    resource,
+    best_device,
+)
+
+try:
+    # Launch the job
+    return_code = subprocess.run(job_args).returncode
+finally:
+    release_quantum_resource(
+        resource,
+        best_device,
+        acquisition_token,
+    )
+
+sys.exit(return_code)

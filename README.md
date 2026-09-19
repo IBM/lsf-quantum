@@ -25,7 +25,8 @@ Follow these steps as _root_.
 For example, on Rocky Linux 9.x:
 ```
 dnf install python3.11-pip
-pip-3 install requests dotenv omegaconf 
+pip-3 install requests dotenv omegaconf qrmi
+
 ```
 
 2. Add `esub.qrmi and jobstarter.qrmi` to the existing LSF cluster. 
