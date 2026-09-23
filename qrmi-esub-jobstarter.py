@@ -2086,13 +2086,29 @@ def select_device_health(req_qubits, devices_status, devices_config):
 #devices_defaults = get_device_topology(token, devices, "defaults")
 #-------------------------------------------------------------------------
 
-def build_quantum_resource(device):
-    """Build the QRMI resource for the selected IBM Quantum backend."""
+def build_quantum_resource(device, qpu_type):
+    """Build a QRMI resource using the configured QPU resource type."""
     from qrmi import QuantumResource, ResourceType
+
+    resource_types = {
+        "ibm-quantum-system": ResourceType.IBMQuantumSystem,
+        "ibm-quantum-compute-service": ResourceType.IBMQuantumComputeService,
+        "qiskit-runtime-service": ResourceType.IBMQiskitRuntimeService,
+        "pasqal-cloud": ResourceType.PasqalCloud,
+        "iqm-server": ResourceType.IQMServer,
+        "alice-bob-felis": ResourceType.AliceBobFelis,
+    }
+
+    try:
+        resource_type = resource_types[qpu_type]
+    except KeyError as error:
+        raise ValueError(
+            f"Unsupported QRMI QPU type: {qpu_type!r}"
+        ) from error
 
     return QuantumResource(
         device,
-        ResourceType.IBMQuantumComputeService,
+        resource_type,
     )
 
 
@@ -2121,17 +2137,26 @@ def release_quantum_resource(resource, device, token):
 
 def build_qrmi_vars_job(config, device):
     """
-    Build QRMI environment variables with device for a job
+    Build the resource-scoped QRMI environment variables for a job.
     """
-    for key, val in config.items():
-        if 'QRMI' in key:
-            if key == 'QRMI_JOB_QPU_TYPES':
-                continue
-            tmp = device + '_' + key
-            os.environ[tmp] = str(val)
-            os.environ.pop(key)
-    os.environ['QRMI_IBM_QCS_BEST_DEVICE'] = device
-    os.environ['QRMI_JOB_QPU_RESOURCES'] = device
+    job_variables = {
+        "QRMI_JOB_QPU_RESOURCES",
+        "QRMI_JOB_QPU_TYPES",
+    }
+
+    for key, value in config.items():
+        if not key.startswith("QRMI_"):
+            continue
+
+        if key in job_variables:
+            continue
+
+        os.environ[f"{device}_{key}"] = str(value)
+        os.environ.pop(key, None)
+
+    os.environ["QRMI_IBM_QCS_BEST_DEVICE"] = device
+    os.environ["QRMI_JOB_QPU_RESOURCES"] = device
+
 
 def build_qrmi_vars_lsf(config, device):
     """
@@ -2190,50 +2215,37 @@ def transfer_vars_lsf(config, requests):
 
 def read_config_from_env():
     """
-    Build QRMI environment variables for jobs. 
-    Note that "QCS" variables are for QPUs on IBM Quantum Platform.
-    See QRMI documentation for other platforms.
+    Read QRMI configuration and ESUB requests from the environment.
+
+    QRMI provider variables are preserved generically so that the
+    jobstarter does not assume a specific backend namespace.
     """
-    config = {}
+    config = {
+        key: value
+        for key, value in os.environ.items()
+        if key.startswith("QRMI_")
+    }
 
-    api_key = os.getenv("QRMI_IBM_QCS_IAM_APIKEY")
-    if not api_key:
-        print_error("No QRMI_IBM_QCS_IAM_APIKEY provided")
-    config.update({"QRMI_IBM_QCS_IAM_APIKEY": api_key})
+    config.update(
+        {
+            "ESUB_USER_REQ_SELECTOR": os.getenv(
+                "ESUB_USER_REQ_SELECTOR"
+            ),
+            "ESUB_USER_REQ_DEVICE": os.getenv(
+                "ESUB_USER_REQ_DEVICE"
+            ),
+            "ESUB_USER_REQ_QPU": os.getenv(
+                "ESUB_USER_REQ_QPU"
+            ),
+        }
+    )
 
-    crn = os.getenv("QRMI_IBM_QCS_SERVICE_CRN")
-    if not crn:
-        print_error("No QRMI_IBM_QCS_SERVICE_CRN provided")
-    config.update({"QRMI_IBM_QCS_SERVICE_CRN": crn})
-
-    qrs_endpoint = os.getenv("QRMI_IBM_QCS_ENDPOINT")
-    if not qrs_endpoint:
-        print_error("No QRMI_IBM_QCS_ENDPOINT provided")
-    config.update({"QRMI_IBM_QCS_ENDPOINT": qrs_endpoint})
-
-    iam_endpoint = os.getenv("QRMI_IBM_QCS_IAM_ENDPOINT")
-    if not iam_endpoint:
-        print_error("No QRMI_IBM_QCS_IAM_ENDPOINT provided")
-    config.update({"QRMI_IBM_QCS_IAM_ENDPOINT": iam_endpoint})
-
-    # Optional, so can be null
-    mode = os.getenv("QRMI_IBM_QCS_SESSION_MODE")
-    if mode:
-        config.update({"QRMI_IBM_QCS_SESSION_MODE": mode})
-
-    device_selector = os.getenv("ESUB_USER_REQ_SELECTOR")
-    config.update({"ESUB_USER_REQ_SELECTOR": device_selector})
-
-    req_device = os.getenv("ESUB_USER_REQ_DEVICE")
-    config.update({"ESUB_USER_REQ_DEVICE": req_device})
-
-    req_qpu = os.getenv("ESUB_USER_REQ_QPU", None)
-    config.update({"ESUB_USER_REQ_QPU": req_qpu})
-
-    qrmi_job_type = os.getenv("QRMI_JOB_QPU_TYPES", None)
-    config.update({"QRMI_JOB_QPU_TYPES": qrmi_job_type})
+    qpu_type = config.get("QRMI_JOB_QPU_TYPES")
+    if not qpu_type:
+        print_error("No QRMI_JOB_QPU_TYPES provided")
 
     return config
+
 
 def extract_qubits(user_request: str) -> int | None:
     for item in user_request.split(";"):
@@ -2294,6 +2306,7 @@ else:
 
 # Build QRMI environment vars for LSF
 config = read_config_from_env()
+qpu_type = config["QRMI_JOB_QPU_TYPES"].strip()
 #print(config, file=sys.stderr)
 
 # If user wants a specific device, just use it. 
@@ -2304,7 +2317,10 @@ if device is not None:
     # Set {device}_QRMI variables for a job
     build_qrmi_vars_job(config, device)
 
-    resource = build_quantum_resource(device)
+    resource = build_quantum_resource(
+        device,
+        qpu_type,
+    )
     acquisition_token = acquire_quantum_resource(resource, device)
 
     try:
@@ -2412,7 +2428,10 @@ else:
 # Set {device}_QRMI variables for a job
 build_qrmi_vars_job(config, best_device)
 
-resource = build_quantum_resource(best_device)
+resource = build_quantum_resource(
+    best_device,
+    qpu_type,
+)
 
 acquisition_token = acquire_quantum_resource(
     resource,
