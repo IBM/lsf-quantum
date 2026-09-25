@@ -16,6 +16,7 @@ import os
 import time
 import json
 import requests
+from qrmi import QuantumResource, ResourceType
 import subprocess
 from dotenv import dotenv_values
 from operator import itemgetter
@@ -414,7 +415,7 @@ def select_device_priority(
     Select a backend according to prioritized user requirements.
 
     backend_metrics must have the structure returned by
-    get_all_backend_metrics_rest():
+    get_all_backend_metrics():
 
         {
             "ibm_backend_name": {
@@ -1020,6 +1021,24 @@ def get_device_topology(token, devices, request_type):
         print_debug("Devices topology:, devices_topo")        
     return devices_topo
 
+def get_device_config_qrmi(devices, config):
+    result = []
+    for name in devices["devices"]:
+        os.environ.update({
+            f"{name}_{key}": str(value)
+            for key, value in config.items()
+            if key.startswith("QRMI_IBM_QCS_") and value is not None
+        })
+        target = json.loads(QuantumResource(name, ResourceType.IBMQuantumComputeService).target().value)
+        configuration = target["configuration"]
+        readout_errors, t1_values_us, _ = extract_qubit_metrics(target["properties"])
+        configuration["T1_median_µs"] = safe_median(t1_values_us) or 0.0
+        configuration["readout_error_median"] = safe_median(readout_errors) if readout_errors else 1.0
+        configuration["device"] = name
+        result.append(configuration)
+    return result
+
+
 def read_env_vars_from_config(config):
     """
     Read QRMI related variables from $CWD/envfile
@@ -1444,9 +1463,10 @@ def extract_rest_backend_metrics(
     }
 
 
-def get_all_backend_metrics_rest(
+def get_all_backend_metrics(
     access_token: str,
     service_crn: str,
+    qrmi_config: Mapping[str, str],
     *,
     base_url: str = (
         "https://quantum.cloud.ibm.com/api"
@@ -1455,8 +1475,8 @@ def get_all_backend_metrics_rest(
     timeout: float = 30.0,
 ) -> dict[str, dict[str, Any]]:
     """
-    Retrieve all accessible IBM Quantum backends via REST and
-    return a nested metrics dictionary.
+    Discover accessible backends via REST, read targets via QRMI,
+    and return a nested metrics dictionary.
 
     Returns:
 
@@ -1518,23 +1538,16 @@ def get_all_backend_metrics_rest(
 
         backend_name = str(backend_name)
 
-        backend_url = (
-            f"{base_url.rstrip('/')}"
-            f"/v1/backends/{backend_name}"
-        )
+        os.environ.update({
+            f"{backend_name}_{key}": str(value)
+            for key, value in qrmi_config.items()
+            if key.startswith("QRMI_IBM_QCS_") and value is not None
+        })
 
         try:
-            configuration = get_json(
-                session,
-                f"{backend_url}/configuration",
-                timeout,
-            )
-
-            properties = get_json(
-                session,
-                f"{backend_url}/properties",
-                timeout,
-            )
+            target_data = json.loads(QuantumResource(backend_name, ResourceType.IBMQuantumComputeService).target().value)
+            configuration = target_data["configuration"]
+            properties = target_data["properties"]
 
             result[backend_name] = (
                 extract_rest_backend_metrics(
@@ -1544,7 +1557,7 @@ def get_all_backend_metrics_rest(
                 )
             )
 
-        except requests.RequestException as error:
+        except Exception as error:
             # Keep fields already available from the list endpoint
             # even when configuration or properties cannot be read.
             result[backend_name] = {
@@ -1565,7 +1578,7 @@ def get_all_backend_metrics_rest(
                 "T1_median_us": None,
                 "T2_median_us": None,
                 "error": (
-                    f"{type(error).__name__}: {error}"
+                    type(error).__name__
                 ),
             }
 
@@ -2359,9 +2372,10 @@ user_request = config['ESUB_USER_REQ_QPU']
 print_debug("User request:", user_request)
 
 if selector == 'priority':
-    backend_metrics = get_all_backend_metrics_rest(
+    backend_metrics = get_all_backend_metrics(
         access_token=token,
         service_crn=crn,
+        qrmi_config=config,
     )
 
     if debug == 'level2':    
@@ -2409,7 +2423,7 @@ else:
     print_debug("Status: ", devices_status)
 
     # Get attributes from  each device.
-    devices_config = get_device_topology(token, devices, "configuration")
+    devices_config = get_device_config_qrmi(devices, config)
     if not devices_config:
        print_error("No configuration of quantum devices.")
     if debug == 'level2':
