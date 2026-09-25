@@ -24,6 +24,7 @@ import socket
 import re
 import time
 import statistics
+from qrmi import QRMIService
 from dotenv import dotenv_values
 from dotenv import load_dotenv
 from pathlib import Path
@@ -126,7 +127,9 @@ def read_env_vars_from_config():
 
     # Only need API and CRN ...
 
-    api_key = os.environ.get("APIKEY")
+    api_key = os.environ.get(f"{device}_QRMI_IBM_QRS_IAM_APIKEY") or os.environ.get("APIKEY")
+    if api_key:
+        os.environ["APIKEY"] = api_key
     if not api_key:
         print_error("No APIKEY provided")     
 
@@ -134,7 +137,7 @@ def read_env_vars_from_config():
     if not token:
        print_error("No IAM bearer token provided.")
 
-    crn = os.environ.get("CRN")
+    crn = os.environ.get(f"{device}_QRMI_IBM_QRS_SERVICE_CRN") or os.environ.get("CRN")
     if not crn:
        print_error("No CRN provided")     
 
@@ -316,6 +319,18 @@ if not device:
 
 # Read environment variables from $LSF_ENVDIR/env.qpu and generate IAM bearer token
 token, crn = read_env_vars_from_config()
+os.environ["QRMI_JOB_QPU_RESOURCES"] = device
+os.environ["QRMI_JOB_QPU_TYPES"] = "qiskit-runtime-service"
+prefix = device + "_QRMI_IBM_QRS_"
+os.environ[prefix + "IAM_APIKEY"] = os.environ["APIKEY"]
+os.environ[prefix + "SERVICE_CRN"] = crn
+os.environ[prefix + "ENDPOINT"] = "https://quantum.cloud.ibm.com/api/v1"
+os.environ[prefix + "IAM_ENDPOINT"] = "https://iam.cloud.ibm.com"
+try:
+    qrmi_resource = next(r for r in QRMIService().resources() if r.resource_id() == device)
+except Exception as error:
+    print_error(f"QRMI discovery failed: {type(error).__name__}")
+
 # Start token cache timer
 token_cache_start_time = time.time()
 
@@ -328,10 +343,17 @@ while True:
     time_delta = time_current - token_cache_start_time
     if ( time_delta > token_cache_time): 
         token, crn = read_env_vars_from_config()
+        os.environ[prefix + "IAM_APIKEY"] = os.environ["APIKEY"]
+        os.environ[prefix + "SERVICE_CRN"] = crn
         token_cache_start_time = time_current
         print_debug("Updated IAM token")
 
-    device_config = get_device_topology(token, device, "configuration")
+    try:
+        target_data = json.loads(qrmi_resource.target().value)
+        device_config = target_data.get("configuration")
+        device_properties = target_data.get("properties")
+    except Exception as error:
+        print_error(f"QRMI target failed: {type(error).__name__}")
     if not device_config:
         print_error("No configuration of quantum device.")
         break 
@@ -353,7 +375,6 @@ while True:
             # Continue building elim output string 
             elim_output += f"pending_jobs {device_status['length_queue']} " 
 
-    device_properties = get_device_topology(token, device, "properties")
     if not device_properties:
         print_error("No properties of quantum device.")
         break
