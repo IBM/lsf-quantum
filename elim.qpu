@@ -390,8 +390,8 @@ while True:
         cz_value = properties['cz_error_median']
         elim_output += f"cz_error_median {format(cz_value, '.1e').replace('e-0', 'e-').replace('e+0', 'e+')} "
 
-        elim_output += f"T1_median_µs {properties['T1_median_us']:.2f} "
-        elim_output += f"T2_median_µs {properties['T2_median_us']:.2f} "
+        elim_output += f"T1_median_us {properties['T1_median_us']:.2f} "
+        elim_output += f"T2_median_us {properties['T2_median_us']:.2f} "
 
     print(elim_output, flush=True) 
     time.sleep(sleep_time)
