@@ -10,13 +10,6 @@ Figure 1 depicts workflow of an LSF job submission using `esub.qrmi` and `jobsta
 
 ![LSF job submission](Figure_1.png) 
 
-
-
-Both `elim.qpu` and `esub.qrmi`/`jobstarter.qrmi` now access the IBM Quantum
-Platform exclusively through QRMI rather than by calling the REST API directly.
-See [README.QRMI-MIGRATION.md](README.QRMI-MIGRATION.md) for the call-by-call
-mapping, the behavioural differences and the configuration change.
-
 ## Prerequisites
 - Working [IBM Spectrum LSF Suites](https://www.ibm.com/products/hpc-workload-management)  or [LSF Community Edition](https://epwt-www.mybluemix.net/software/support/trial/cst/programwebsite.wss?siteId=680&h=null&p=null) cluster.
 - Account on ![IBM Quantum Platform](https://quantum.ibm.com/) with generated API key and a CRN number.
