@@ -13,6 +13,11 @@ Figure 1 depicts workflow of an LSF job submission using `esub.qrmi` and `jobsta
 
 
 
+Both `elim.qpu` and `esub.qrmi`/`jobstarter.qrmi` now access the IBM Quantum
+Platform exclusively through QRMI rather than by calling the REST API directly.
+See [README.QRMI-MIGRATION.md](README.QRMI-MIGRATION.md) for the call-by-call
+mapping, the behavioural differences and the configuration change.
+
 ## Prerequisites
 - Working [IBM Spectrum LSF Suites](https://www.ibm.com/products/hpc-workload-management)  or [LSF Community Edition](https://epwt-www.mybluemix.net/software/support/trial/cst/programwebsite.wss?siteId=680&h=null&p=null) cluster.
 - Account on ![IBM Quantum Platform](https://quantum.ibm.com/) with generated API key and a CRN number.
@@ -50,7 +55,7 @@ Create a virtual environment, for example
 ```
 conda create -n lsfqrmi python==3.11
 conda activate lsfqrmi
-pip install qrmi dotenv omegaconf requests
+pip install -U "qrmi[ibm]" dotenv omegaconf
 ```
 ### Submitting jobs
 ```
@@ -163,7 +168,7 @@ bsub -Is -a "qrmi(file=".env", device=ibm_sherbrook)" run_example.sh
 
 ## LSF ELIM for IBM Quantum Platform
 
-This **LSF ELIM (External Load Information Manager)** to report available IBM Quantum systems (QPUS), their respective properties, as well as pending workloads as **load indices** in IBM Spectrum LSF. These indices, can help LSF to make better job placement and throttling decisions for workloads that target QPUs. It relies upon the IBM Qiskit REST API to retrieve information. 
+This **LSF ELIM (External Load Information Manager)** to report available IBM Quantum systems (QPUS), their respective properties, as well as pending workloads as **load indices** in IBM Spectrum LSF. These indices, can help LSF to make better job placement and throttling decisions for workloads that target QPUs. It relies upon the [QRMI](https://github.com/qiskit-community/qrmi) API to retrieve information. 
 
 ## Overview
 
@@ -186,7 +191,7 @@ This ELIM is used to query the IBM Quantum Platform for information on QPUs incl
 ## Details
 
 - LIM periodically executes the ELIM script.
-- ELIM authenticates to IBM Quantum (via API key) and queries backend status and queue metrics.
+- ELIM authenticates to IBM Quantum through QRMI (via API key and CRN) and queries backend target and status metrics.
 - ELIM prints `name=value` pairs to **stdout**, which LIM ingests as LSF load indices.
 
 ## Prerequisites
@@ -194,16 +199,38 @@ This ELIM is used to query the IBM Quantum Platform for information on QPUs incl
 - **IBM Spectrum LSF** installed and configured on your cluster nodes (LIM must be running on the hosts where ELIM will execute).
 - **IBM Quantum account** with an **API key** and access to desired backends.
 - Network egress from the LIM/ELIM host(s) to the IBM Quantum API endpoint.
-- Python 3.9+ and **Qiskit** installed. 
+- Python 3.11+ and **QRMI 0.25.1 or later** installed (`pip install -U "qrmi[ibm]"`). Earlier releases also work, except that the `pending_jobs` index requires `QuantumResource.status()`, first published in 0.25.1; on 0.24.5 that one index is reported as `-`. See [README.QRMI-MIGRATION.md](README.QRMI-MIGRATION.md).
 
 ## Configuration
 
 - *$LSF_ENVDIR/env.qpu* containing the IBM Quantum API key and CRN (Cloud Resource Name) required for authentication. The script *env.qpu* must be owned by the LSF Administrator user with octal 400 permissions. 
 
 ```bash
-APIKEY=api_key_value
-CRN=crn_value
+QRMI_IBM_QCS_IAM_APIKEY=api_key_value
+QRMI_IBM_QCS_SERVICE_CRN=crn_value
+QRMI_IBM_QCS_ENDPOINT=https://quantum.cloud.ibm.com/api/v1
+QRMI_IBM_QCS_IAM_ENDPOINT=https://iam.cloud.ibm.com
 ```
+
+The legacy `APIKEY` and `CRN` names are still accepted and are mapped onto the
+two QRMI names above, with the endpoints defaulting to the public IBM Quantum
+Platform URLs, so existing *env.qpu* files keep working. Set the endpoints
+explicitly for any regional or non-public deployment.
+
+QRMI itself reads these settings per resource, as `<QPU_name>_<SETTING>`.
+`elim.qpu` derives its QPU name from `lshosts` and exports the prefixed form
+for you, so the unprefixed spelling above is sufficient. To serve several QPUs
+from one *env.qpu*, or to give one QPU a different endpoint, prefix the names
+explicitly instead — a prefixed value is never overwritten by the default:
+
+```bash
+ibm_marrakesh_QRMI_IBM_QCS_IAM_APIKEY=api_key_value
+ibm_marrakesh_QRMI_IBM_QCS_SERVICE_CRN=crn_value
+ibm_marrakesh_QRMI_IBM_QCS_ENDPOINT=https://eu-de.quantum.cloud.ibm.com/api/v1
+ibm_marrakesh_QRMI_IBM_QCS_IAM_ENDPOINT=https://iam.cloud.ibm.com
+```
+
+See [README.QRMI-MIGRATION.md](README.QRMI-MIGRATION.md) for details.
 
 - *$LSF_ENVDIR/lsf.shared* file updated to contain the following resources. IBM QPU names are defined as booleans to map a classical LSF server to a QPU and determine on which LSF host an elim will start and which QPU it will use to collect information. The list of QPUs available to the specific user can be obtained from the IBM Quantum Platform dashboard. 
 
@@ -270,7 +297,7 @@ Before running LSF Elim, you need to map the classical system to the quantum sys
 <li>Install the required packages on the host where the elim will be run. This corresponds to the LSF classical and QPU mapping that is defined in the LSF configuration. </li>
 
 ```bash
-$ pip install qiskit requests
+$ pip install "qrmi[ibm]" dotenv
 ```
 
 <li>As the LSF Administrator user, copy elim.qpu to correct directory and set the execute permissions.</li>
@@ -285,8 +312,10 @@ chmod 755 $LSF_SERVERDIR/elim.qpu
 ```bash
 $LSF_ENVDIR/env.qpu
 
-APIKEY={api_key_value}
-CRN={crn_value}
+QRMI_IBM_QCS_IAM_APIKEY={api_key_value}
+QRMI_IBM_QCS_SERVICE_CRN={crn_value}
+QRMI_IBM_QCS_ENDPOINT=https://quantum.cloud.ibm.com/api/v1
+QRMI_IBM_QCS_IAM_ENDPOINT=https://iam.cloud.ibm.com
 ```
 
 <li>Test the correct operation of the elim.</li>
