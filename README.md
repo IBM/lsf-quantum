@@ -199,7 +199,7 @@ This ELIM is used to query the IBM Quantum Platform for information on QPUs incl
 - **IBM Spectrum LSF** installed and configured on your cluster nodes (LIM must be running on the hosts where ELIM will execute).
 - **IBM Quantum account** with an **API key** and access to desired backends.
 - Network egress from the LIM/ELIM host(s) to the IBM Quantum API endpoint.
-- Python 3.11+ and **QRMI 0.25.1 or later** installed (`pip install -U "qrmi[ibm]"`). Earlier releases also work, except that the `pending_jobs` index requires `QuantumResource.status()`, first published in 0.25.1; on 0.24.5 that one index is reported as `-`. See [README.QRMI-MIGRATION.md](README.QRMI-MIGRATION.md).
+- Python 3.11+ and **QRMI 0.25.1 or later** installed (`pip install -U "qrmi[ibm]"`).
 
 ## Configuration
 
@@ -229,8 +229,6 @@ ibm_marrakesh_QRMI_IBM_QCS_SERVICE_CRN=crn_value
 ibm_marrakesh_QRMI_IBM_QCS_ENDPOINT=https://eu-de.quantum.cloud.ibm.com/api/v1
 ibm_marrakesh_QRMI_IBM_QCS_IAM_ENDPOINT=https://iam.cloud.ibm.com
 ```
-
-See [README.QRMI-MIGRATION.md](README.QRMI-MIGRATION.md) for details.
 
 - *$LSF_ENVDIR/lsf.shared* file updated to contain the following resources. IBM QPU names are defined as booleans to map a classical LSF server to a QPU and determine on which LSF host an elim will start and which QPU it will use to collect information. The list of QPUs available to the specific user can be obtained from the IBM Quantum Platform dashboard. 
 
@@ -392,6 +390,5 @@ For information on how to contribute to this project, please take a look at our 
 ---
 ## References and Acknowledgements
 1. Quantum Resource Management Interface (QRMI): https://github.com/qiskit-community/qrmi/tree/main
-2. Qiskit https://www.ibm.com/quantum/qiskit
-3. IBM Quantum https://www.ibm.com/quantum
-5. STFC The Hartree Centre, https://www.hartree.stfc.ac.uk. This work was supported by the Hartree National Centre for Digital Innovation (HNCDI) programme.
+2. IBM Quantum https://www.ibm.com/quantum
+3. STFC The Hartree Centre, https://www.hartree.stfc.ac.uk. This work was supported by the Hartree National Centre for Digital Innovation (HNCDI) programme.
