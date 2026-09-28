@@ -1,8 +1,7 @@
 # Quantum workloads with IBM LSF
 
 ## Introduction
-One of the key elements of the ![Quantum Centric Supercomputing](https://www.ibm.com/think/topics/quantum-centric-supercomputing) paradigm is a unified management of workloads and workflows on the integrated
-quantum computing and high performace compting infrastrtucture. The latter requires development of the corresponding middleware stack, which includes workload and workflow managers.
+One of the key elements of the hybrid quantum--HPC paradigm is the unified management of workloads and workflows across integrated quantum and high-performance computing (HPC) infrastructure. This in turn requires a corresponding middleware stack, including workload and workflow managers.
 
 This repository contains implementation of plugins for IBM LSF workload manager for handling jobs using ![Quantum Resource Management Interface (QRMI)](https://github.com/qiskit-community/qrmi/tree/main), a vendor agnostic library providing a set of APIs to facilitate deployment of workloads on quantum processing units (QPUs).
 
