@@ -15,7 +15,7 @@ import sys
 import os
 import time
 import json
-import requests
+import ctypes
 import subprocess
 from dotenv import dotenv_values
 from operator import itemgetter
@@ -414,7 +414,7 @@ def select_device_priority(
     Select a backend according to prioritized user requirements.
 
     backend_metrics must have the structure returned by
-    get_all_backend_metrics_rest():
+    get_all_backend_metrics_qrmi():
 
         {
             "ibm_backend_name": {
@@ -927,7 +927,6 @@ def parse_config() -> Config:
     return config
 
 
-
 # Functions
 
 def read_config_file(cfile):
@@ -942,112 +941,25 @@ def read_config_file(cfile):
     config = dotenv_values(env_file)
     return config
 
-def gen_bearer_token(api_key):
+
+def validate_env_vars_from_config(config):
     """
-    Generate an IAM bearer token (valid for 3600 sec.)
+    Validate the QRMI related variables read from $CWD/envfile.
+
+    QRMI builds its own authenticated clients from these variables and renews
+    the IAM bearer token internally, so this only checks that the required
+    variables are present. No token is generated here.
     """
-    url = "https://iam.cloud.ibm.com/identity/token"
-    payload = {
-        "grant_type": "urn:ibm:params:oauth:grant-type:apikey",
-        "apikey": api_key
-    }
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "application/json"
-    }
-    try:
-        response = requests.post(url, data=payload, headers=headers)
-        response.raise_for_status()
-        data = response.json()
-        bearer_token = data["access_token"]
-        return bearer_token
-    except requests.exceptions.RequestException as e:
-        print(f"An error occurred: {e}", file=sys.stderr)
-        if hasattr(e, 'response') and e.response:
-            print(f"Response status code: {e.response.status_code}", file=sys.stderr)
-            print(f"Response content: {e.response.text}", file=sys.stderr)
-        return None
+    required = (
+        "QRMI_IBM_QCS_IAM_APIKEY",
+        "QRMI_IBM_QCS_SERVICE_CRN",
+        "QRMI_IBM_QCS_ENDPOINT",
+        "QRMI_IBM_QCS_IAM_ENDPOINT",
+    )
 
-def get_avail_devices(token, crn):
-    """
-    Get a list of available devices
-    """
-    url = "https://quantum.cloud.ibm.com/api/v1/backends"
-    headers = {
-        "Service-CRN": crn,
-        "accept": "application/json",
-        "Authorization": "Bearer " + token
-    }
-    try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        devices = response.json()
-        return devices
-    except requests.exceptions.RequestException as e:
-        print(f"An error occurred: {e}", file=sys.stderr)
-        if hasattr(e, 'response') and e.response:
-            print(f"Response status code: {e.response.status_code}", file=sys.stderr)
-            print(f"Response content: {e.response.text}", file=sys.stderr)
-        return None
-
-def get_device_topology(token, devices, request_type):
-    """
-    Get status of available devices
-    Returns a list of dictionaries with each list element corresponding to a device.
-    """
-    devices_topo = []
-    for key, device in devices.items():
-        for name in device:
-            url = "https://quantum.cloud.ibm.com/api/v1/backends/" + name + "/" + request_type
-            headers = {
-                "Service-CRN": crn,
-                "accept": "application/json",
-                "Authorization": "Bearer " + token
-            }
-            try:
-                response = requests.get(url, headers=headers)
-                response.raise_for_status()
-                topo = response.json()
-                topo['device'] = name
-                devices_topo.append(topo)
-            except requests.exceptions.RequestException as e:
-                print(f"An error occurred: {e}", file=sys.stderr)
-                if hasattr(e, 'response') and e.response:
-                    print(f"Response status code: {e.response.status_code}", file=sys.stderr)
-                    print(f"Response content: {e.response.text}", file=sys.stderr)
-                return None
-    if debug == 'level2':        
-        print_debug("Devices topology:, devices_topo")        
-    return devices_topo
-
-def read_env_vars_from_config(config):
-    """
-    Read QRMI related variables from $CWD/envfile
-    """
-    api_key = config["QRMI_IBM_QCS_IAM_APIKEY"]
-    if not api_key:
-        print_error("No QRMI_IBM_QCS_IAM_APIKEY provided")
-
-    token = gen_bearer_token(api_key)
-    if not token:
-        print_error("No IAM bearer token provided.")
-
-    crn = config["QRMI_IBM_QCS_SERVICE_CRN"]
-    if not crn:
-        print_error("No QRMI_IBM_QCS_SERVICE_CRN provided")
-
-    qrs_endpoint = config["QRMI_IBM_QCS_ENDPOINT"]
-    if not qrs_endpoint:
-        print_error("No QRMI_IBM_QCS_ENDPOINT provided")
-
-    iam_endpoint = config["QRMI_IBM_QCS_IAM_ENDPOINT"]
-    if not iam_endpoint:
-        print_error("No QRMI_IBM_QCS_IAM_ENDPOINT provided")
-
-    # Optional, so can be null
-    mode = config["QRMI_IBM_QCS_SESSION_MODE"]
-
-    return token, crn
+    for name in required:
+        if not config.get(name):
+            print_error(f"No {name} provided")
 
 
 NULL_STRINGS = {
@@ -1078,31 +990,11 @@ def safe_median(values: list[float]) -> float | None:
     return float(median(values)) if values else None
 
 
-def get_json(
-    session: requests.Session,
-    url: str,
-    timeout: float = 30.0,
-) -> dict[str, Any]:
-    """Perform a REST GET request and return its JSON object."""
-    response = session.get(url, timeout=timeout)
-    response.raise_for_status()
-
-    data = response.json()
-
-    if not isinstance(data, dict):
-        raise TypeError(
-            f"Expected a JSON object from {url}, "
-            f"received {type(data).__name__}"
-        )
-
-    return data
-
-
 def extract_clops(device: dict[str, Any]) -> int | float | str | None:
     """
-    Extract CLOPS from a backend-list entry.
+    Extract CLOPS from a backend-list entry or a backend configuration.
 
-    The normal REST representation is:
+    The backend-list representation is:
 
         {
             "clops": {
@@ -1111,14 +1003,25 @@ def extract_clops(device: dict[str, Any]) -> int | float | str | None:
             }
         }
 
-    Scalar CLOPS values are also accepted.
+    A backend configuration instead publishes the figure as a scalar under
+    clops_h (or clops_v), so all three keys are checked in that order. Scalar
+    CLOPS values are also accepted.
     """
-    clops = normalize_value(device.get("clops"))
+    for key in ("clops", "clops_h", "clops_v"):
+        clops = normalize_value(device.get(key))
 
-    if isinstance(clops, dict):
-        return normalize_value(clops.get("value"))
+        if clops is None:
+            continue
 
-    return clops
+        if isinstance(clops, dict):
+            clops = normalize_value(clops.get("value"))
+
+            if clops is None:
+                continue
+
+        return clops
+
+    return None
 
 
 def extract_parameter_value(
@@ -1341,13 +1244,84 @@ def extract_gate_errors(
     return errors
 
 
-def extract_rest_backend_metrics(
-    device: dict[str, Any],
+def build_provider(config, qpu_type):
+    """
+    Build a QRMI ResourceProvider used to enumerate available backends.
+
+    Replaces the REST calls to GET /backends. The provider is constructed from
+    the QRMI_* variables already present in the configuration, so no bearer
+    token has to be generated or cached here -- QRMI renews it internally.
+    """
+    from qrmi import ResourceProvider, ResourceType
+
+    resource_types = {
+        "ibm-quantum-system": ResourceType.IBMQuantumSystem,
+        "ibm-quantum-compute-service": ResourceType.IBMQuantumComputeService,
+        "qiskit-runtime-service": ResourceType.IBMQiskitRuntimeService,
+    }
+
+    try:
+        resource_type = resource_types[qpu_type]
+    except KeyError as error:
+        raise ValueError(
+            f"Unsupported QRMI QPU type for backend enumeration: {qpu_type!r}"
+        ) from error
+
+    environment = {
+        key: str(value)
+        for key, value in config.items()
+        if key.startswith("QRMI_") and value is not None
+    }
+
+    return ResourceProvider(resource_type, environment)
+
+
+def get_resource_status(resource):
+    """
+    Return a QRMI resource's status as a plain dict.
+
+    QuantumResource.status() landed after the 0.24.5 release; QRMI 0.25.1 is the
+    first published wheel that has it. On 0.24.5 only is_accessible() exists,
+    and calling status() unguarded there raises AttributeError, which --
+    because both callers wrap their queries in try/except -- would silently
+    drop every backend and leave the selectors with nothing to choose from.
+    The guard below shapes the older API into the same dict instead, so
+    selection keeps working with pending_jobs unavailable.
+
+    Mirrors get_device_status() in elim.qpu.
+    """
+    if hasattr(resource, "status"):
+        return resource.status().to_dict()
+
+    accessible = resource.is_accessible()
+    return {
+        "status": "online" if accessible else "offline",
+        "status_reason": None,
+        "healthy": accessible,
+        "busy": None,
+        "capacity": None,
+        "pending_job_count": None,
+    }
+
+
+def extract_qrmi_backend_metrics(
     configuration: dict[str, Any],
     properties: dict[str, Any],
+    status: dict[str, Any],
 ) -> dict[str, Any]:
     """
-    Construct metrics for one REST backend.
+    Construct metrics for one QRMI backend.
+
+    This is the QRMI counterpart of extract_rest_backend_metrics(). The
+    configuration and properties documents are the ones QRMI returns from
+    target(); because QRMI passes the service payload through verbatim,
+    vendor-specific fields such as clops_h and sample_name are preserved and
+    the same extraction helpers apply.
+
+    Unlike the REST variant there is no backend-list "device" entry, so
+    pending_jobs comes from the QRMI status document rather than from
+    queue_length, and CLOPS and the processor type are read from the
+    configuration.
     """
     readout_errors, t1_values_us, t2_values_us = (
         extract_qubit_metrics(properties)
@@ -1364,70 +1338,26 @@ def extract_rest_backend_metrics(
         "cz",
     )
 
-    performance_metrics = device.get(
-        "performance_metrics",
-        {},
-    )
-
-    if not isinstance(performance_metrics, dict):
-        performance_metrics = {}
-
-    # Prefer calculation from raw calibration data.
-    readout_error_median = safe_median(
-        readout_errors
-    )
-
-    # Fall back to the aggregate from the list endpoint.
-    if readout_error_median is None:
-        aggregate = performance_metrics.get(
-            "readout_error_median"
-        )
-
-        if isinstance(aggregate, dict):
-            aggregate = aggregate.get("value")
-
-        aggregate = normalize_value(aggregate)
-
-        if aggregate is not None:
-            try:
-                readout_error_median = float(
-                    aggregate
-                )
-            except (TypeError, ValueError):
-                pass
-
     qubits = normalize_value(
-        device.get("qubits")
+        configuration.get("n_qubits")
     )
-
-    if qubits is None:
-        qubits = normalize_value(
-            configuration.get("n_qubits")
-        )
 
     qpu_version = normalize_value(
         configuration.get("backend_version")
     )
 
-    processor_type = normalize_value(
-        device.get("processor_type")
-    )
-
-    if processor_type is None:
-        processor_type = normalize_value(
-            configuration.get("processor_type")
-        )
+    processor_type = extract_processor_type(configuration)
 
     return {
         "qubits": qubits,
         "qpu_version": qpu_version,
         "processor_type": processor_type,
-        "clops": extract_clops(device),
+        "clops": extract_clops(configuration),
         "pending_jobs": normalize_value(
-            device.get("queue_length")
+            status.get("pending_job_count")
         ),
-        "readout_error_median": (
-            readout_error_median
+        "readout_error_median": safe_median(
+            readout_errors
         ),
         "sx_error_median": safe_median(
             sx_errors
@@ -1444,19 +1374,75 @@ def extract_rest_backend_metrics(
     }
 
 
-def get_all_backend_metrics_rest(
-    access_token: str,
-    service_crn: str,
+def extract_processor_type(
+    configuration: dict[str, Any],
+) -> Any | None:
+    """
+    Extract the processor type from a backend configuration.
+
+    Two representations are accepted:
+
+      - a processor_type object, as published by the backend configuration
+        schema: {"family": "Heron", "revision": "2"}
+      - a sample_name string: "family: Heron, revision: 2"
+
+    The object form is returned unchanged so that selectors comparing
+    processor_type["family"] keep working. The string form is converted to the
+    same shape.
+    """
+    processor_type = normalize_value(
+        configuration.get("processor_type")
+    )
+
+    if processor_type is not None:
+        return processor_type
+
+    sample_name = normalize_value(
+        configuration.get("sample_name")
+    )
+
+    if not isinstance(sample_name, str):
+        return None
+
+    parsed: dict[str, str] = {}
+
+    for part in sample_name.split(","):
+        key, separator, value = part.partition(":")
+
+        if not separator:
+            continue
+
+        parsed[key.strip().lower()] = value.strip()
+
+    family = parsed.get("family")
+
+    if family is None:
+        return None
+
+    processor_type = {"family": family}
+
+    revision = parsed.get("revision")
+
+    if revision is not None:
+        processor_type["revision"] = revision
+
+    return processor_type
+
+
+def get_all_backend_metrics_qrmi(
+    config,
+    qpu_type: str,
     *,
-    base_url: str = (
-        "https://quantum.cloud.ibm.com/api"
-    ),
-    api_version: str = "2026-04-15",
-    timeout: float = 30.0,
+    filters: str | None = None,
 ) -> dict[str, dict[str, Any]]:
     """
-    Retrieve all accessible IBM Quantum backends via REST and
-    return a nested metrics dictionary.
+    Retrieve all accessible backends via QRMI and return a nested metrics
+    dictionary keyed by backend name.
+
+    This replaces three sets of REST calls -- GET /backends,
+    GET /backends/{id}/configuration and GET /backends/{id}/properties -- with
+    QRMI's ResourceProvider.resources() plus target() and status() per
+    backend.
 
     Returns:
 
@@ -1475,90 +1461,47 @@ def get_all_backend_metrics_rest(
             }
         }
     """
-    session = requests.Session()
-    session.headers.update(
-        {
-            "Accept": "application/json",
-            "Authorization": (
-                f"Bearer {access_token}"
-            ),
-            "Service-CRN": service_crn,
-            "IBM-API-Version": api_version,
-        }
-    )
+    provider = build_provider(config, qpu_type)
 
-    list_url = f"{base_url.rstrip('/')}/v1/backends"
-
-    backend_response = get_json(
-        session,
-        list_url,
-        timeout,
-    )
-
-    devices = backend_response.get("devices", [])
-
-    if not isinstance(devices, list):
-        raise TypeError(
-            "REST response field 'devices' "
-            "is not a list"
-        )
+    resources = provider.resources(filters)
 
     result: dict[str, dict[str, Any]] = {}
 
-    for device in devices:
-        if not isinstance(device, dict):
+    for resource in resources:
+        try:
+            backend_name = str(resource.resource_id())
+        except Exception as error:
+            print(
+                f"Skipping a backend whose identifier could not be read: {error}",
+                file=sys.stderr,
+            )
             continue
-
-        backend_name = normalize_value(
-            device.get("name")
-        )
-
-        if backend_name is None:
-            continue
-
-        backend_name = str(backend_name)
-
-        backend_url = (
-            f"{base_url.rstrip('/')}"
-            f"/v1/backends/{backend_name}"
-        )
 
         try:
-            configuration = get_json(
-                session,
-                f"{backend_url}/configuration",
-                timeout,
-            )
+            target = json.loads(resource.target().value)
 
-            properties = get_json(
-                session,
-                f"{backend_url}/properties",
-                timeout,
-            )
+            configuration = target.get("configuration") or {}
+            properties = target.get("properties") or {}
+
+            status = get_resource_status(resource)
 
             result[backend_name] = (
-                extract_rest_backend_metrics(
-                    device,
+                extract_qrmi_backend_metrics(
                     configuration,
                     properties,
+                    status,
                 )
             )
 
-        except requests.RequestException as error:
-            # Keep fields already available from the list endpoint
-            # even when configuration or properties cannot be read.
+        except Exception as error:
+            # Record the backend as unusable rather than aborting the whole
+            # selection, matching the REST implementation's behaviour.
             result[backend_name] = {
-                "qubits": normalize_value(
-                    device.get("qubits")
-                ),
+                "qubits": None,
                 "qpu_version": None,
-                "processor_type": normalize_value(
-                    device.get("processor_type")
-                ),
-                "clops": extract_clops(device),
-                "pending_jobs": normalize_value(
-                    device.get("queue_length")
-                ),
+                "processor_type": None,
+                "clops": None,
+                "pending_jobs": None,
                 "readout_error_median": None,
                 "sx_error_median": None,
                 "cz_error_median": None,
@@ -1570,6 +1513,107 @@ def get_all_backend_metrics_rest(
             }
 
     return result
+
+
+def get_devices_topology_qrmi(
+    config,
+    qpu_type: str,
+    *,
+    filters: str | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """
+    Enumerate backends via QRMI and return (devices_status, devices_config) in
+    the shape the "basic" and "health" selectors expect.
+
+    This replaces get_avail_devices() plus two get_device_topology() calls.
+    Each returned element carries a "device" key naming the backend, matching
+    the REST implementation, so the selectors need no changes.
+
+    The status entries expose 'length_queue' and 'message' as the REST status
+    endpoint did. QRMI reports the queue depth as pending_job_count and the
+    availability as a status code, so both are translated back to the REST
+    spelling here: a status of "online" becomes the message 'available'.
+    """
+    provider = build_provider(config, qpu_type)
+
+    resources = provider.resources(filters)
+
+    devices_status: list[dict[str, Any]] = []
+    devices_config: list[dict[str, Any]] = []
+
+    for resource in resources:
+        try:
+            backend_name = str(resource.resource_id())
+
+            status = get_resource_status(resource)
+
+            target = json.loads(resource.target().value)
+
+            configuration = target.get("configuration") or {}
+            properties = target.get("properties") or {}
+        except Exception as error:
+            print(
+                f"Skipping a backend that could not be queried: {error}",
+                file=sys.stderr,
+            )
+            continue
+
+        # QRMI reports 'online' where the REST status endpoint reported the
+        # message 'available'.
+        message = (
+            "available"
+            if status.get("status") == "online"
+            else str(status.get("status_reason") or status.get("status"))
+        )
+
+        # Key order matters: select_device_default() flattens these dicts into
+        # positional lists by iterating them, and then indexes those lists. It
+        # expects message, length_queue, device for the status entries and
+        # n_qubits, device for the configuration entries.
+        # The selectors sort and do arithmetic on length_queue, so it must be
+        # an int. The REST status endpoint always supplied one; QRMI reports
+        # None when the vendor omits it, and QRMI <= 0.24.5 has no status() at
+        # all (see get_resource_status). Fall back to 0 -- treating an unknown
+        # queue as empty keeps every backend eligible, which matches the old
+        # behaviour of ranking on the other criteria.
+        queue_length = normalize_value(status.get("pending_job_count"))
+        if queue_length is None:
+            queue_length = 0
+
+        devices_status.append(
+            {
+                "message": message,
+                "length_queue": queue_length,
+                "device": backend_name,
+            }
+        )
+
+        # The "health" selector additionally scores on median T1 and readout
+        # error. QRMI returns the calibration data in the same target()
+        # document as the configuration, so these are filled in here rather
+        # than requiring a separate properties request. Any key added below
+        # must come after n_qubits to keep the positional indexing above
+        # valid.
+        readout_errors, t1_values_us, _ = (
+            extract_qubit_metrics(properties)
+        )
+
+        devices_config.append(
+            {
+                "n_qubits": normalize_value(
+                    configuration.get("n_qubits")
+                ),
+                "device": backend_name,
+                "T1_median_µs": safe_median(
+                    t1_values_us
+                ),
+                "readout_error_median": safe_median(
+                    readout_errors
+                ),
+            }
+        )
+
+    return devices_status, devices_config
 
 
 def select_device_priority(backend_metrics, user_request):
@@ -1909,7 +1953,6 @@ def select_device_priority(backend_metrics, user_request):
     )
 
 
-
 def select_device_default(req_qubits, devices_status, devices_config):
     """
     Device selection based on the number of qubits and queue length.
@@ -1958,7 +2001,6 @@ def select_device_default(req_qubits, devices_status, devices_config):
     #print(f"Selecting <{best_device}> as the least busy device with enough qbits.")
 
     return best_device
-
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2079,11 +2121,10 @@ def select_device_health(req_qubits, devices_status, devices_config):
     return best_device
 
 #-------------------------------------------------------------------------
-# To be implemented for mor complex topology decisions.
-#devices_properties = get_device_topology(token, devices, "properties")
-
-# Needs a different implementation
-#devices_defaults = get_device_topology(token, devices, "defaults")
+# To be implemented for more complex topology decisions. The calibration
+# properties are already available from the QRMI target() document, which
+# get_devices_topology_qrmi() reads; the defaults (pulse-level) document is
+# not exposed by QRMI and needs a different implementation.
 #-------------------------------------------------------------------------
 
 def build_quantum_resource(device, qpu_type):
@@ -2156,6 +2197,141 @@ def build_qrmi_vars_job(config, device):
 
     os.environ["QRMI_IBM_QCS_BEST_DEVICE"] = device
     os.environ["QRMI_JOB_QPU_RESOURCES"] = device
+
+
+def read_process_environ():
+    """
+    Read this process's real environment, not Python's cached copy.
+
+    QRMI's ResourceProvider injects its per-backend variables from Rust via
+    env::set_var(), which calls libc setenv(). That mutates the C-level
+    `environ` that execve() passes to children, but Python populated
+    os.environ once at interpreter start and never re-reads it -- so those
+    names are absent from os.environ while still being inherited by every
+    subprocess. Deleting them from os.environ is a no-op for the same reason.
+
+    The C `environ` symbol is read through ctypes, which reflects setenv()
+    calls made by native code and works wherever libc does. /proc/self/environ
+    is deliberately not used: on Linux it reports the environment as it was at
+    exec() time, so it would miss exactly the writes this function exists to
+    find.
+
+    Falls back to os.environ if the symbol cannot be reached, in which case the
+    prune sees only what Python knows about -- no worse than not pruning.
+    """
+    try:
+        libc = ctypes.CDLL(None)
+        environ = ctypes.POINTER(ctypes.c_char_p).in_dll(libc, "environ")
+    except (OSError, ValueError):
+        return dict(os.environ)
+
+    live = {}
+    index = 0
+    while environ[index]:
+        name, separator, value = environ[index].partition(b"=")
+        if separator:
+            live[name.decode("utf-8", "replace")] = value.decode("utf-8", "replace")
+        index += 1
+    return live
+
+
+def snapshot_backend_env():
+    """
+    Record the environment as it stands before backend enumeration.
+
+    QRMI's ResourceProvider calls setenv() for every backend it enumerates:
+    inject_backend_env() in
+    qrmi/src/ibm/quantum_compute_service_provider/mod.rs writes
+    "<backend>_<KEY>" for each provider setting, because
+    IBMQuantumComputeService::new() resolves its configuration only through
+    that resource-scoped name. Enumerating N backends therefore leaves N sets
+    of prefixed variables in this process, all of which the job would otherwise
+    inherit.
+
+    The REST implementation did not do this -- GET /backends touched no
+    environment -- so the environment is captured here and job_environment()
+    undoes QRMI's writes for the backends that were not selected.
+
+    Values are captured, not just names, because inject_backend_env()
+    overwrites an existing "<backend>_<KEY>" as readily as it creates one: a
+    site-set value for an unselected device would otherwise be silently
+    replaced by the provider's own, which is harder to notice than an outright
+    removal.
+    """
+    return read_process_environ()
+
+
+def job_environment(before, device):
+    """
+    Build the environment for the job, with QRMI's per-backend injections for
+    the unselected backends undone.
+
+    Returns a dict to hand to subprocess.run(env=...). The injected names live
+    only in the C-level environment (see read_process_environ()), so they
+    cannot be removed via os.environ -- the job's environment is therefore
+    constructed explicitly rather than inherited.
+
+    Each affected variable is restored to what `before` recorded: a name QRMI
+    created is dropped, and one it overwrote is put back to the site-set value
+    rather than dropped. Variables for the selected device are kept as QRMI
+    wrote them, since acquire()/release() and the job itself rely on them.
+
+    Pruning is unconditional: the job's QRMI variables always describe only the
+    selected device. LSF_QRMI_DEBUG=level1 or level2 adds an informational
+    listing of the backends QRMI enumerated, which would otherwise be lost, but
+    does not change what the job receives.
+    """
+    live = read_process_environ()
+
+    # os.environ carries what this script set itself (build_qrmi_vars_job,
+    # acquire_quantum_resource); `live` carries those plus QRMI's native
+    # writes. Merge so neither is lost.
+    environment = dict(live)
+    environment.update(os.environ)
+
+    def is_foreign(name):
+        # Resource-scoped names only: "QRMI_*" is the unprefixed provider
+        # configuration, which build_qrmi_vars_job() handles.
+        if "QRMI" not in name or name.startswith("QRMI_"):
+            return False
+        return not name.startswith(f"{device}_")
+
+    created = [
+        name for name in environment if is_foreign(name) and name not in before
+    ]
+    overwritten = [
+        name
+        for name in environment
+        if is_foreign(name) and name in before and environment[name] != before[name]
+    ]
+
+    if not created and not overwritten:
+        return environment
+
+    # Report the enumeration before discarding it: these names are the only
+    # record of which backends QRMI considered, and pruning removes them.
+    if debug:
+        enumerated = sorted(
+            {name.split("_QRMI", 1)[0] for name in created + overwritten}
+            | {device}
+        )
+        print_debug(
+            f"QRMI enumerated {len(enumerated)} available device(s):",
+            ", ".join(enumerated),
+        )
+        print_debug("Setting QRMI variables for the selected device only:", device)
+
+    for name in created:
+        environment.pop(name, None)
+    for name in overwritten:
+        environment[name] = before[name]
+
+    print_debug(
+        f"Pruned {len(created)} injected and restored {len(overwritten)} "
+        f"overwritten QRMI variable(s) for unselected backends"
+    )
+
+    return environment
 
 
 def build_qrmi_vars_lsf(config, device):
@@ -2262,7 +2438,6 @@ def extract_qubits(user_request: str) -> int | None:
     return None
 
 
-
 #-----------------------------------------------------
 # Main starts here
 #-----------------------------------------------------
@@ -2314,6 +2489,10 @@ device = config["ESUB_USER_REQ_DEVICE"]
 if isinstance(device, str) and device.strip().lower() in {"none", "null", ""}:
     device = None
 if device is not None:
+    # No enumeration on this path, so QRMI injects nothing: snapshot and prune
+    # are still applied so the job's environment is built the same way.
+    env_before_enumeration = snapshot_backend_env()
+
     # Set {device}_QRMI variables for a job
     build_qrmi_vars_job(config, device)
 
@@ -2323,9 +2502,11 @@ if device is not None:
     )
     acquisition_token = acquire_quantum_resource(resource, device)
 
+    job_env = job_environment(env_before_enumeration, device)
+
     try:
         # Launch the job
-        subprocess.run(job_args)
+        subprocess.run(job_args, env=job_env)
     finally:
         release_quantum_resource(
             resource,
@@ -2335,9 +2516,15 @@ if device is not None:
 
     sys.exit(0)
 
-# Get IAM access token
-token, crn = read_env_vars_from_config(config)
-print_debug("Obtained authentication token and CRN")
+# Validate the QRMI configuration. No IAM access token is generated here:
+# QRMI acquires and renews the bearer token internally on each call.
+validate_env_vars_from_config(config)
+print_debug("Validated QRMI configuration")
+
+# Record the environment before enumeration: QRMI's ResourceProvider setenv()s
+# a "<backend>_<KEY>" set for every backend it inspects, and only the selected
+# device's set should reach the job.
+env_before_enumeration = snapshot_backend_env()
 
 # Select best device for a job 
 selector = config['ESUB_USER_REQ_SELECTOR']
@@ -2359,9 +2546,9 @@ user_request = config['ESUB_USER_REQ_QPU']
 print_debug("User request:", user_request)
 
 if selector == 'priority':
-    backend_metrics = get_all_backend_metrics_rest(
-        access_token=token,
-        service_crn=crn,
+    backend_metrics = get_all_backend_metrics_qrmi(
+        config,
+        qpu_type,
     )
 
     if debug == 'level2':    
@@ -2396,20 +2583,18 @@ else:
         print_error("No qubits requirement was specified")
     print_debug("Requested qubits", qubits)
 
-    # Get available devices.
-    devices = get_avail_devices(token, crn)
-    if not devices:
-        print_error("No quantum devices found.")
-    print_debug("Devices: ", devices['devices'])
+    # Get status and attributes of each available device. A single QRMI
+    # enumeration replaces the former GET /backends call plus the per-device
+    # status and configuration requests.
+    devices_status, devices_config = get_devices_topology_qrmi(
+        config,
+        qpu_type,
+    )
 
-    # Get status of each available device.
-    devices_status = get_device_topology(token, devices, "status")
     if not devices_status:
         print_error("No status of quantum devices.")
     print_debug("Status: ", devices_status)
 
-    # Get attributes from  each device.
-    devices_config = get_device_topology(token, devices, "configuration")
     if not devices_config:
        print_error("No configuration of quantum devices.")
     if debug == 'level2':
@@ -2438,9 +2623,14 @@ acquisition_token = acquire_quantum_resource(
     best_device,
 )
 
+# Build the job's environment explicitly, dropping the per-backend variables
+# QRMI injected for the backends it enumerated but we did not select. They live
+# in the C-level environment, so they cannot be removed via os.environ.
+job_env = job_environment(env_before_enumeration, best_device)
+
 try:
     # Launch the job
-    return_code = subprocess.run(job_args).returncode
+    return_code = subprocess.run(job_args, env=job_env).returncode
 finally:
     release_quantum_resource(
         resource,
