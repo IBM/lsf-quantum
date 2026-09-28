@@ -1,4 +1,4 @@
-#!/usr/bin/env python3  
+#!/usr/bin/env python3
 
 # -*- coding: utf-8 -*-
 
@@ -18,9 +18,8 @@ import os
 import time
 import json
 import argparse
-import requests
 import subprocess
-import socket 
+import socket
 import re
 import time
 import statistics
@@ -29,131 +28,207 @@ from dotenv import load_dotenv
 from pathlib import Path
 from operator import itemgetter
 
+from qrmi import QuantumResource, ResourceType
+
+# Settings required to construct an IBM Quantum Compute Service resource.
+# QRMI reads each one from the process environment under a resource-scoped
+# name, "<resource_id>_<SETTING>"; see read_env_vars_from_config().
+QRMI_REQUIRED_VARS = (
+    "QRMI_IBM_QCS_IAM_APIKEY",
+    "QRMI_IBM_QCS_SERVICE_CRN",
+    "QRMI_IBM_QCS_ENDPOINT",
+    "QRMI_IBM_QCS_IAM_ENDPOINT",
+)
+
+# Defaults applied when env.qpu supplies neither a prefixed nor an unprefixed
+# value for these endpoints (e.g. it carries only the legacy APIKEY/CRN pair).
+QRMI_ENDPOINT_DEFAULTS = {
+    "QRMI_IBM_QCS_ENDPOINT": "https://quantum.cloud.ibm.com/api/v1",
+    "QRMI_IBM_QCS_IAM_ENDPOINT": "https://iam.cloud.ibm.com",
+}
+
+# Maps the legacy env.qpu names onto the QRMI names.
+QRMI_LEGACY_ALIASES = {
+    "APIKEY": "QRMI_IBM_QCS_IAM_APIKEY",
+    "CRN": "QRMI_IBM_QCS_SERVICE_CRN",
+}
+
 def print_debug(message, var=None):
     """
-    Print a debug message to stderr 
+    Print a debug message to stderr
     """
     if debug:
         message = "[DEBUG] " + message
         if var:
             message = message + " {}"
             print(message.format(var), file=sys.stderr)
-        else:   
+        else:
             print(message, file=sys.stderr)
 
 def print_error(message):
     """
-    Print a error message to stderr 
+    Print a error message to stderr
     """
     message = "[ERROR] " + message
     print(message, file=sys.stderr)
     exit(1)
 
-def gen_bearer_token(api_key):
+def read_env_vars_from_config(device):
     """
-    Generate an IAM bearer token (valid for 3600 sec.)
+    Load QRMI configuration from $LSF_ENVDIR/env.qpu into the environment.
+
+    QRMI resolves its settings per resource, from environment variables named
+    "<resource_id>_<SETTING>" -- so for ibm_marrakesh it reads
+    ibm_marrakesh_QRMI_IBM_QCS_ENDPOINT and never the bare
+    QRMI_IBM_QCS_ENDPOINT. There is no fallback to the unprefixed name, so
+    this function exports the prefixed form for the device this ELIM serves.
+    That matches the convention used by esub.qrmi/jobstarter.qrmi, which set
+    "<device>_<key>" for the resources a job acquires.
+
+    env.qpu may spell each setting in any of three ways, tried in order:
+
+      1. "<device>_QRMI_IBM_QCS_*" -- already prefixed, used as-is.
+      2. "QRMI_IBM_QCS_*"         -- unprefixed, promoted to the prefixed name.
+      3. "APIKEY" / "CRN"         -- legacy names, mapped then promoted.
+
+    The two endpoints fall back to the public IBM Quantum Platform URLs when
+    env.qpu supplies neither form.
+
+    Note that no IAM bearer token is generated here. QRMI acquires and renews
+    the token internally on each call, which replaces the token cache this
+    script used to maintain by hand.
     """
-    url = "https://iam.cloud.ibm.com/identity/token"
-    payload = {
-        "grant_type": "urn:ibm:params:oauth:grant-type:apikey",
-        "apikey": api_key
-    }
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "application/json"
-    }
-
-    try:
-        response = requests.post(url, data=payload, headers=headers)
-        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
-        data = response.json()
-        bearer_token = data["access_token"]
-        #print(f"Bearer token: {bearer_token}")
-        return bearer_token
-
-    except requests.exceptions.RequestException as e:
-        print(f"An error occurred: {e}", file=sys.stderr)
-        if hasattr(e, 'response') and e.response:
-            print(f"Response status code: {e.response.status_code}", file=sys.stderr)
-            print(f"Response content: {e.response.text}", file=sys.stderr)
-        return None
-
-
-def get_device_topology(token, device, request_type):
-    """
-    Query IBM Quantum Cloud API for a single backend specified by myqpu.
-    """
-    backend_name = device 
-
-    # Build the URL for the specific backend and request type
-    url = f"https://quantum.cloud.ibm.com/api/v1/backends/{backend_name}/{request_type}"
-    headers = {
-        "Service-CRN": crn,  # Must be a string CRN, not a dict
-        "accept": "application/json",
-        "Authorization": f"Bearer {token}"
-    }
-
-    try:
-        response = requests.get(url, headers=headers, timeout=30)
-        response.raise_for_status()  # Raise HTTPError for bad responses
-        topo = response.json()
-        topo["device"] = backend_name
-        return topo
-
-    except requests.exceptions.RequestException as e:
-        print(f"An error occurred: {e}", file=sys.stderr)
-        if hasattr(e, 'response') and e.response:
-            print(f"Response status code: {e.response.status_code}", file=sys.stderr)
-            print(f"Response content: {e.response.text}", file=sys.stderr)
-        return None
-
-def read_env_vars_from_config():
-    """    
-    Read CRN and API key from $LSF_ENVDIR/env.qpu 
-    """ 
     lsf_envdir = os.environ.get("LSF_ENVDIR")
 
     env_qpu_path = Path(lsf_envdir) / "env.qpu"
-     
-    
+
     if os.path.exists(env_qpu_path):
         print_debug("Found: ", env_qpu_path)
     else:
         print_error("File qpu.env does not exist in $LSF_ENVDIR")
 
+    load_dotenv(dotenv_path=env_qpu_path)
 
-    load_dotenv(dotenv_path=env_qpu_path) 
+    # Accept the legacy APIKEY/CRN spelling by promoting it to the QRMI names.
+    for legacy_name, qrmi_name in QRMI_LEGACY_ALIASES.items():
+        if not os.environ.get(qrmi_name):
+            legacy_value = os.environ.get(legacy_name)
+            if legacy_value:
+                os.environ[qrmi_name] = legacy_value
+                print_debug(f"Mapped {legacy_name} to {qrmi_name}")
 
-    # Only need API and CRN ...
+    # Export the device-prefixed names that QRMI actually reads. An already
+    # prefixed value in env.qpu wins; otherwise the unprefixed one is
+    # promoted, and the endpoints fall back to the public defaults.
+    missing = []
+    for qrmi_name in QRMI_REQUIRED_VARS:
+        prefixed_name = f"{device}_{qrmi_name}"
 
-    api_key = os.environ.get("APIKEY")
-    if not api_key:
-        print_error("No APIKEY provided")     
+        if os.environ.get(prefixed_name):
+            print_debug(f"Using {prefixed_name} from env.qpu")
+            continue
 
-    token = gen_bearer_token(api_key)
-    if not token:
-       print_error("No IAM bearer token provided.")
+        value = os.environ.get(qrmi_name) or QRMI_ENDPOINT_DEFAULTS.get(qrmi_name)
+        if not value:
+            missing.append(qrmi_name)
+            continue
 
-    crn = os.environ.get("CRN")
-    if not crn:
-       print_error("No CRN provided")     
+        os.environ[prefixed_name] = value
+        print_debug(f"Set {prefixed_name}")
 
-    return token, crn 
+    if missing:
+        print_error(
+            f"Missing required variable(s) in env.qpu for {device}: "
+            f"{', '.join(missing)} (accepted either as <name> or {device}_<name>)"
+        )
 
+def build_quantum_resource(device):
+    """
+    Build the QRMI resource used to query the quantum device.
+    """
+    try:
+        return QuantumResource(device, ResourceType.IBMQuantumComputeService)
+    except Exception as error:
+        print_error(f"Failed to create QRMI resource for {device}: {error}")
+
+def get_device_target(resource):
+    """
+    Fetch the target of the quantum device through QRMI.
+
+    QRMI's target() combines GET /backends/{id}/configuration and
+    GET /backends/{id}/properties into a single JSON document, so one call
+    replaces the two REST requests this script used to issue. The payload is
+    passed through verbatim by QRMI, so vendor-specific fields such as
+    clops_h and sample_name are preserved.
+
+    Returns a (configuration, properties) tuple, either of which may be None
+    when the service does not return that document.
+    """
+    try:
+        target = json.loads(resource.target().value)
+    except Exception as error:
+        print(f"An error occurred: {error}", file=sys.stderr)
+        return None, None
+
+    return target.get("configuration"), target.get("properties")
+
+def get_device_status(resource):
+    """
+    Fetch the status of the quantum device through QRMI.
+
+    Replaces GET /backends/{id}/status. Returns a dict shaped like QRMI's
+    ResourceStatus, or None on failure.
+
+    QuantumResource.status() landed after the 0.24.5 release; QRMI 0.25.1 is the
+    first published wheel that has it. The is_accessible() branch below is
+    retained for hosts still on 0.24.5, where status() does not exist. It
+    reports a bool and carries no queue length, so pending_job_count is None
+    (rendered as "-") and the pending_jobs load index is unavailable there. The
+    other nine indices are unaffected.
+
+    0.24.5 offers no alternative source for the figure: metadata() returns only
+    backend_name and session_id, and ResourceProvider discards queue_length
+    after using it to sort. This branch therefore degrades rather than trying
+    to recover the number. Upgrading to 0.25.1 or later needs no code change --
+    status() is detected and used automatically; see README.QRMI-MIGRATION.md.
+    """
+    if hasattr(resource, "status"):
+        try:
+            return resource.status().to_dict()
+        except Exception as error:
+            print(f"An error occurred: {error}", file=sys.stderr)
+            return None
+
+    # Pre-0.25.1 fallback: accessibility only, no queue length available.
+    try:
+        accessible = resource.is_accessible()
+    except Exception as error:
+        print(f"An error occurred: {error}", file=sys.stderr)
+        return None
+
+    print_debug("status() unavailable in this QRMI build; used is_accessible()")
+    return {
+        "status": "online" if accessible else "offline",
+        "status_reason": None,
+        "healthy": accessible,
+        "busy": None,
+        "capacity": None,
+        "pending_job_count": None,
+    }
 
 def get_system_config(device_config):
     """
     Get quantum system configuration.
     """
 
-    n_qubits=device_config.get("n_qubits") 
+    n_qubits=device_config.get("n_qubits")
     clops_h=device_config.get("clops_h")
     backend_version=device_config.get("backend_version")
 
     print_debug("qubits", device_config.get("n_qubits"))
     print_debug("clops", device_config.get("clops_h"))
     print_debug("qpu_version", device_config.get("backend_version"))
-    
+
     basis_gates = device_config.get("basis_gates", [])
     basis_gates_str = "_".join(map(str, basis_gates))
 
@@ -230,7 +305,7 @@ def get_system_medians(device_properties):
                 if not isinstance(val, (int, float)):
                     continue
 
-                # Names: T1/T2 uppercase; readout_error lowercase as per properties API output.  
+                # Names: T1/T2 uppercase; readout_error lowercase as per properties API output.
                 if name == "readout_error":
                     readout_errors.append(float(val))
                 elif name == "T1":
@@ -275,6 +350,31 @@ def get_system_medians(device_properties):
         "cz_error_median": cz_median,
     }
 
+def format_scientific(value):
+    """
+    Format a value in scientific notation as expected by LSF, or "-" when the
+    value is unavailable.
+    """
+    if value is None:
+        return "-"
+    return format(value, '.1e').replace('e-0', 'e-').replace('e+0', 'e+')
+
+def format_fixed(value):
+    """
+    Format a value with two decimals as expected by LSF, or "-" when the value
+    is unavailable.
+    """
+    if value is None:
+        return "-"
+    return f"{value:.2f}"
+
+def format_value(value):
+    """
+    Format a plain resource value, or "-" when it is unavailable. LSF treats
+    "-" as "value not currently available" for a numeric resource.
+    """
+    return "-" if value is None else value
+
 
 #-----------------------------------------------------
 # Main starts here
@@ -283,11 +383,8 @@ debug = os.getenv('LSF_ELIM_DEBUG')
 if debug != 'level1' and debug != 'level2':
    debug = None
 
-# LSF elim sleep time 
-sleep_time = 10  
-
-# IAM token cache time
-token_cache_time = 3500
+# LSF elim sleep time
+sleep_time = 10
 
 # Get the hostname
 hostname = socket.gethostname()
@@ -310,69 +407,70 @@ if ibm_resource:
 else:
    print_error("No resource starting with 'ibm_' found.")
 
-device = str(ibm_resource) 
+device = str(ibm_resource)
 if not device:
    print_error("No quantum devices found.")
 
-# Read environment variables from $LSF_ENVDIR/env.qpu and generate IAM bearer token
-token, crn = read_env_vars_from_config()
-# Start token cache timer
-token_cache_start_time = time.time()
+# Load QRMI configuration from $LSF_ENVDIR/env.qpu into the environment. QRMI
+# reads its settings from "<device>_<SETTING>" variables, so this must run
+# after the device name is known and before the resource is constructed.
+read_env_vars_from_config(device)
+
+# Build the QRMI resource once and reuse it for every poll. QRMI renews the
+# IAM bearer token internally, so no token cache is maintained here.
+resource = build_quantum_resource(device)
+print_debug("Created QRMI resource for", device)
 
 while True:
 
     elim_output = ""
 
-    time_current = time.time()
-    # If exceeded cache time, get a new token
-    time_delta = time_current - token_cache_start_time
-    if ( time_delta > token_cache_time): 
-        token, crn = read_env_vars_from_config()
-        token_cache_start_time = time_current
-        print_debug("Updated IAM token")
+    device_config, device_properties = get_device_target(resource)
 
-    device_config = get_device_topology(token, device, "configuration")
     if not device_config:
-        print_error("No configuration of quantum device.")
-        break 
-    else: 
+        # Transient fetch failure: skip this cycle and retry on the next one.
+        print_debug("No configuration of quantum device.")
+        time.sleep(sleep_time)
+        continue
+    else:
         configuration = get_system_config(device_config)
 
         # Build elim output string
         elim_output += "10 "
-        elim_output += f"qubits {configuration['qubits']} "
-        elim_output += f"clops {configuration['clops']} "
-        elim_output += f"qpu_version {configuration['qpu_version']} "
-        elim_output += f"processor_type {configuration['processor_type']} "
+        elim_output += f"qubits {format_value(configuration['qubits'])} "
+        elim_output += f"clops {format_value(configuration['clops'])} "
+        elim_output += f"qpu_version {format_value(configuration['qpu_version'])} "
+        elim_output += f"processor_type {format_value(configuration['processor_type'])} "
 
-        # Get status of quantum device.
-        device_status = get_device_topology(token, device, "status")
+        # Get status of quantum device. A status failure is transient, so
+        # report pending_jobs as unavailable and keep polling rather than
+        # exiting -- an ELIM that exits takes every index down with it.
+        device_status = get_device_status(resource)
         if not device_status:
-            print_error("No status of quantum device.")
-        else: 
-            # Continue building elim output string 
-            elim_output += f"pending_jobs {device_status['length_queue']} " 
+            print_debug("No status of quantum device.")
+            elim_output += "pending_jobs - "
+        else:
+            # Continue building elim output string
+            elim_output += f"pending_jobs {format_value(device_status.get('pending_job_count'))} "
 
-    device_properties = get_device_topology(token, device, "properties")
     if not device_properties:
-        print_error("No properties of quantum device.")
-        break
-    else: 
+        # Calibration data missing: report the medians as unavailable but keep
+        # the field count at 10 so LSF still parses the line.
+        print_debug("No properties of quantum device.")
+        for name in ("readout_error_median", "sx_error_median", "cz_error_median",
+                     "T1_median_µs", "T2_median_µs"):
+            elim_output += f"{name} - "
+    else:
         properties = get_system_medians(device_properties)
 
-        readout_value = properties['readout_error_median']
-        elim_output += f"readout_error_median {format(readout_value, '.1e').replace('e-0', 'e-').replace('e+0', 'e+')} "
+        elim_output += f"readout_error_median {format_scientific(properties['readout_error_median'])} "
+        elim_output += f"sx_error_median {format_scientific(properties['sx_error_median'])} "
+        elim_output += f"cz_error_median {format_scientific(properties['cz_error_median'])} "
 
-        sx_value = properties['sx_error_median']
-        elim_output += f"sx_error_median {format(sx_value, '.1e').replace('e-0', 'e-').replace('e+0', 'e+')} "
+        elim_output += f"T1_median_µs {format_fixed(properties['T1_median_us'])} "
+        elim_output += f"T2_median_µs {format_fixed(properties['T2_median_us'])} "
 
-        cz_value = properties['cz_error_median']
-        elim_output += f"cz_error_median {format(cz_value, '.1e').replace('e-0', 'e-').replace('e+0', 'e+')} "
-
-        elim_output += f"T1_median_µs {properties['T1_median_us']:.2f} "
-        elim_output += f"T2_median_µs {properties['T2_median_us']:.2f} "
-
-    print(elim_output, flush=True) 
+    print(elim_output, flush=True)
     time.sleep(sleep_time)
 
 exit(0)
