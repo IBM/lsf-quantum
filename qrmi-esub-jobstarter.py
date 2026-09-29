@@ -1439,11 +1439,6 @@ def get_all_backend_metrics_qrmi(
     Retrieve all accessible backends via QRMI and return a nested metrics
     dictionary keyed by backend name.
 
-    This replaces three sets of REST calls -- GET /backends,
-    GET /backends/{id}/configuration and GET /backends/{id}/properties -- with
-    QRMI's ResourceProvider.resources() plus target() and status() per
-    backend.
-
     Returns:
 
         {
@@ -1524,15 +1519,6 @@ def get_devices_topology_qrmi(
     """
     Enumerate backends via QRMI and return (devices_status, devices_config) in
     the shape the "basic" and "health" selectors expect.
-
-    This replaces get_avail_devices() plus two get_device_topology() calls.
-    Each returned element carries a "device" key naming the backend, matching
-    the REST implementation, so the selectors need no changes.
-
-    The status entries expose 'length_queue' and 'message' as the REST status
-    endpoint did. QRMI reports the queue depth as pending_job_count and the
-    availability as a status code, so both are translated back to the REST
-    spelling here: a status of "online" becomes the message 'available'.
     """
     provider = build_provider(config, qpu_type)
 
@@ -2052,8 +2038,7 @@ def select_device_health(req_qubits, devices_status, devices_config):
     Device selection based on job requirements and devices availability
     and topology.
 
-    Original: picked the least-busy device with enough qubits.
-    Modified: picks the highest composite-health-score device with enough qubits,
+    Picks the highest composite-health-score device with enough qubits,
               weighting T1 coherence, readout error rate, and queue depth together.
     """
     best_device = None
@@ -2247,10 +2232,6 @@ def snapshot_backend_env():
     that resource-scoped name. Enumerating N backends therefore leaves N sets
     of prefixed variables in this process, all of which the job would otherwise
     inherit.
-
-    The REST implementation did not do this -- GET /backends touched no
-    environment -- so the environment is captured here and job_environment()
-    undoes QRMI's writes for the backends that were not selected.
 
     Values are captured, not just names, because inject_backend_env()
     overwrites an existing "<backend>_<KEY>" as readily as it creates one: a
@@ -2575,7 +2556,6 @@ if selector == 'priority':
                 sort_dicts=False,
             )
 else:    
-    # Original implementation
     # Extract number of qubits from a user request
     qubits = extract_qubits(user_request)
 
@@ -2583,9 +2563,7 @@ else:
         print_error("No qubits requirement was specified")
     print_debug("Requested qubits", qubits)
 
-    # Get status and attributes of each available device. A single QRMI
-    # enumeration replaces the former GET /backends call plus the per-device
-    # status and configuration requests.
+    # Get status and attributes of each available device. 
     devices_status, devices_config = get_devices_topology_qrmi(
         config,
         qpu_type,
