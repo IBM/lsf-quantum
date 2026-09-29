@@ -190,7 +190,7 @@ def get_device_status(resource):
     backend_name and session_id, and ResourceProvider discards queue_length
     after using it to sort. This branch therefore degrades rather than trying
     to recover the number. Upgrading to 0.25.1 or later needs no code change --
-    status() is detected and used automatically; see README.QRMI-MIGRATION.md.
+    status() is detected and used automatically.
     """
     if hasattr(resource, "status"):
         try:
