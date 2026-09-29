@@ -41,6 +41,8 @@ case "$arch" in
 esac; 
 
 set -x
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(dirname -- "$script_dir")"
 lsf_tarfile="lsfsce$lsf_version-$lsf_arch.tar.Z"
 lsf_distro="${lsf_tarfile%.*.*}"
 
@@ -51,4 +53,5 @@ podman build \
   --build-arg LSFINSTALLER=$lsf_installer \
   --os linux \
   -t localhost/lsf-ce:latest \
-  .
+  -f "$script_dir/Dockerfile" \
+  "$repo_root"
