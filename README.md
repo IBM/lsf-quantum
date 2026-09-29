@@ -100,7 +100,7 @@ QRMI_JOB_QPU_TYPES="ibm-quantum-compute-service"
 
 To verify your setup submit an interactive job asking for some qbits, for example
 ```
-bsub -Is -a "qrmi(".env", 128)" /bin/bash
+bsub -Is -a "qrmi(file=".env", qpu.qubits=128)" /bin/bash
 ```
 Once the job is dispatched check for QRMI environment variables, for example
 ```
