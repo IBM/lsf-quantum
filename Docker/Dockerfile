@@ -50,8 +50,8 @@ RUN mkdir -p ${LSF_TOP}
 
 RUN useradd lsfadmin
 
-COPY ${LSFTARFILE} /tmp/
-COPY install.config /tmp/
+COPY Docker/${LSFTARFILE} /tmp/
+COPY Docker/install.config /tmp/
 
 RUN cd /tmp/ && \
     tar zxf ${LSFTARFILE} 
@@ -64,15 +64,39 @@ ENV JAVA_HOME=/usr/lib/jvm/jre-17-openjdk
 ENV PATH="${JAVA_HOME}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 WORKDIR /tmp/${LSFDISTRO}/lsf/lsf10.1_lsfinstall
-RUN ./lsfinstall -f /tmp/install.config
+RUN sed -i "s@^[[:space:]]*LSF_TARDIR=.*@LSF_TARDIR=\"/tmp/${LSFDISTRO}/lsf/\"@" /tmp/install.config \
+ && ./lsfinstall -f /tmp/install.config
+
+# LSF-QRMI integration (current repository scripts, including PR #16).
+RUN dnf -y install python3.11 python3.11-pip \
+ && dnf clean all \
+ && python3.11 -m venv /opt/qrmi-venv \
+ && /opt/qrmi-venv/bin/pip install --no-cache-dir \
+      "qrmi[ibm]>=0.25.1" python-dotenv omegaconf
+
+ENV PATH="/opt/qrmi-venv/bin:${PATH}"
+
+COPY qrmi-esub-jobstarter.py elim.qpu /tmp/lsf-quantum/
+
+RUN bash -c 'set -eux; \
+    LSF_SERVERDIR="$(find /opt/lsf/10.1 -mindepth 2 -maxdepth 2 -type d -name etc -print -quit)"; \
+    test -n "$LSF_SERVERDIR"; \
+    install -m 755 /tmp/lsf-quantum/qrmi-esub-jobstarter.py "$LSF_SERVERDIR/qrmi-esub-jobstarter.py"; \
+    install -m 755 /tmp/lsf-quantum/elim.qpu "$LSF_SERVERDIR/elim.qpu"; \
+    sed -i "1c#!/opt/qrmi-venv/bin/python" "$LSF_SERVERDIR/qrmi-esub-jobstarter.py"; \
+    sed -i "1c#!/opt/qrmi-venv/bin/python" "$LSF_SERVERDIR/elim.qpu"; \
+    ln -s qrmi-esub-jobstarter.py "$LSF_SERVERDIR/esub.qrmi"; \
+    ln -s qrmi-esub-jobstarter.py "$LSF_SERVERDIR/jobstarter.qrmi"' \
+ && rm -rf /tmp/lsf-quantum \
+ && /opt/qrmi-venv/bin/python -c "import qrmi, dotenv, omegaconf"
 
 RUN printf '%s\n' '. /opt/lsf/conf/profile.lsf' >> /etc/profile
 
 RUN rm -rf /tmp/install.config \
            /tmp/${LSFDISTRO} \
-           /tmp/${TARFILE}
+           /tmp/${LSFTARFILE}
 
-COPY lsf-entrypoint.sh /usr/local/bin/lsf-entrypoint.sh
+COPY Docker/lsf-entrypoint.sh /usr/local/bin/lsf-entrypoint.sh
 
 RUN chmod 755 /usr/local/bin/lsf-entrypoint.sh
 
