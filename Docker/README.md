@@ -1,10 +1,10 @@
 # Containerized LSF-QRMI test environment
 
-Place the LSF CE archive in Docker/. Build from the repository root with Docker, or run ./Docker/build_podman.sh on a host with Podman. The archive and runtime credentials must not be committed.
+Place the LSF CE archive in Docker/. Run the build helper from the repository root with Docker or Podman. It uses Docker/ as the build context and stages the current integration scripts for the build. The archive and runtime credentials must not be committed.
 
-Docker build on amd64:
+Build on amd64 with Docker:
 
-    docker build --platform linux/amd64 -f Docker/Dockerfile --build-arg LSFTARFILE=lsfsce10.2.0.15-x86_64.tar.Z --build-arg LSFDISTRO=lsfsce10.2.0.15-x86_64 --build-arg LSFINSTALLER=lsf10.1_lsfinstall_linux_x86_64.tar.Z -t lsf-quantum:issue7 .
+    CONTAINER_ENGINE=docker ./Docker/build_podman.sh amd64 10.2.0.15
 
 Start with hostname lsfmaster. Configure the QPU queue, resource map, and credentials at runtime.
 
@@ -27,3 +27,11 @@ On an x86_64 single-node test container (`lsfmaster`), the following passed:
 
 The test queue, QPU resource mapping, and credentials were configured only in
 the disposable test container. A quantum circuit was not submitted to hardware.
+
+### Three-platform validation
+
+The final Dockerfile built successfully for amd64, arm64, and ppc64le. Each image passed LSF startup, host status, ESUB help, QRMI dependency imports, and a synchronous normal-queue hostname job.
+
+AMD64 ran natively on the RHEL x86_64 test host. ARM64 and PPC64LE ran under QEMU emulation. On PPC64LE, the Power10-specific libc probe reported an illegal instruction; the standard libc worked, and LSF startup and job execution succeeded.
+
+Authenticated QRMI jobstarter and live ELIM metrics were previously verified on AMD64. These QPU checks were not repeated on ARM64 or PPC64LE. No quantum circuit was submitted to hardware.
