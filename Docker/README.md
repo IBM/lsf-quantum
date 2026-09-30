@@ -10,28 +10,22 @@ Start with hostname lsfmaster. Configure the QPU queue, resource map, and creden
 
 ## LSF-QRMI integration verification
 
-Build from the repository root with the appropriate LSF CE archive and build
-arguments. The image installs `qrmi[ibm]>=0.25.1`, `python-dotenv`, and
-`omegaconf`, and installs `esub.qrmi`, `jobstarter.qrmi`, and `elim.qpu` into
-LSF's server directory. The installed Python scripts use `/opt/qrmi-venv/bin/python`.
+The image installs `qrmi[ibm]>=0.25.1`, `python-dotenv`, and `omegaconf`. Integration scripts are installed in the LSF server directory and use `/opt/qrmi-venv/bin/python`.
 
-On an x86_64 single-node test container (`lsfmaster`), the following passed:
+All three images passed build, daemon startup, host status, ESUB help, dependency imports, and normal LSF job execution. AMD64 ran natively on RHEL x86_64; ARM64 and PPC64LE ran under QEMU.
 
-- LSF CE 10.1.0.15 started LIM, RES, and batch daemons; a normal LSF job completed.
-- A temporary `quantum_test` queue with `JOB_STARTER=jobstarter.qrmi` accepted
-  `bsub -a "qrmi(file=.env,device=ibm_fez)"`; job 3 completed after the QRMI
-  resource acquire/release path and ran `/bin/hostname`.
-- With `ibm_fez` and the dynamic indices configured in LSF, LIM started
-  `elim.qpu`. `lsload -l lsfmaster` reported live QPU metrics including
-  156 qubits, CLOPS, and pending jobs.
+### Quantum hardware execution
 
-The test queue, QPU resource mapping, and credentials were configured only in
-the disposable test container. A quantum circuit was not submitted to hardware.
+Each container submitted a 2-qubit Bell circuit with 128 shots to `ibm_fez` through LSF ESUB, `JOB_STARTER`, and QRMI SamplerV2. Every LSF job completed successfully and retrieved counts totaling 128 shots.
 
-### Three-platform validation
+| Architecture | LSF job | Quantum job ID | Counts (00, 11, 10, 01) |
+| --- | --- | --- | --- |
+| AMD64 | 2 | dauibibg95ks73eievf0 | 57, 62, 7, 2 |
+| ARM64 | 2 | dauio1ihcrkc73dvnmg0 | 57, 60, 5, 6 |
+| PPC64LE | 3 | dauissbojkfs738s8sqg | 63, 55, 2, 8 |
 
-The final Dockerfile built successfully for amd64, arm64, and ppc64le. Each image passed LSF startup, host status, ESUB help, QRMI dependency imports, and a synchronous normal-queue hostname job.
+Queues, credentials, and the circuit application were configured only in disposable test containers. Live ELIM metrics were additionally verified on AMD64; ELIM metrics were not tested on ARM64 or PPC64LE.
 
-AMD64 ran natively on the RHEL x86_64 test host. ARM64 and PPC64LE ran under QEMU emulation. On PPC64LE, the Power10-specific libc probe reported an illegal instruction; the standard libc worked, and LSF startup and job execution succeeded.
+### PPC64LE emulation limitation
 
-Authenticated QRMI jobstarter and live ELIM metrics were previously verified on AMD64. These QPU checks were not repeated on ARM64 or PPC64LE. No quantum circuit was submitted to hardware.
+The unmodified image reported an illegal instruction when the LSF profile explicitly probed Power10-specific libc under QEMU. Standard libc, daemon startup, and normal job execution worked. For the PPC64LE quantum test, the running container profile was modified to exclude the Power10 libc from that probe. This workaround is not included in the Dockerfile. Native ARM64 and PPC64LE execution was not tested.
