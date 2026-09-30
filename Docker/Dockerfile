@@ -50,8 +50,8 @@ RUN mkdir -p ${LSF_TOP}
 
 RUN useradd lsfadmin
 
-COPY Docker/${LSFTARFILE} /tmp/
-COPY Docker/install.config /tmp/
+COPY ${LSFTARFILE} /tmp/
+COPY install.config /tmp/
 
 RUN cd /tmp/ && \
     tar zxf ${LSFTARFILE} 
@@ -68,7 +68,7 @@ RUN sed -i "s@^[[:space:]]*LSF_TARDIR=.*@LSF_TARDIR=\"/tmp/${LSFDISTRO}/lsf/\"@"
  && ./lsfinstall -f /tmp/install.config
 
 # LSF-QRMI integration (current repository scripts, including PR #16).
-RUN dnf -y install python3.11 python3.11-pip \
+RUN dnf -y --enablerepo=crb install python3.11 python3.11-pip python3.11-devel gcc-gfortran openblas-devel lapack-devel \
  && dnf clean all \
  && python3.11 -m venv /opt/qrmi-venv \
  && /opt/qrmi-venv/bin/pip install --no-cache-dir \
@@ -96,7 +96,7 @@ RUN rm -rf /tmp/install.config \
            /tmp/${LSFDISTRO} \
            /tmp/${LSFTARFILE}
 
-COPY Docker/lsf-entrypoint.sh /usr/local/bin/lsf-entrypoint.sh
+COPY lsf-entrypoint.sh /usr/local/bin/lsf-entrypoint.sh
 
 RUN chmod 755 /usr/local/bin/lsf-entrypoint.sh
 

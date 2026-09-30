@@ -40,18 +40,27 @@ case "$arch" in
                                 ;; 
 esac; 
 
-set -x
+set -ex
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(dirname -- "$script_dir")"
 lsf_tarfile="lsfsce$lsf_version-$lsf_arch.tar.Z"
 lsf_distro="${lsf_tarfile%.*.*}"
 
-podman build \
-  --arch $podman_arch \
+for script in qrmi-esub-jobstarter.py elim.qpu; do
+    if [ -e "$script_dir/$script" ]; then
+        echo "Build staging file already exists: $script_dir/$script" >&2
+        exit 1
+    fi
+done
+trap 'rm -f "$script_dir/qrmi-esub-jobstarter.py" "$script_dir/elim.qpu"' EXIT
+cp "$repo_root/qrmi-esub-jobstarter.py" "$script_dir/"
+cp "$repo_root/elim.qpu" "$script_dir/"
+
+"${CONTAINER_ENGINE:-podman}" build \
+  --platform "linux/$podman_arch" \
   --build-arg LSFTARFILE=$lsf_tarfile \
   --build-arg LSFDISTRO=$lsf_distro \
   --build-arg LSFINSTALLER=$lsf_installer \
-  --os linux \
   -t localhost/lsf-ce:latest \
   -f "$script_dir/Dockerfile" \
-  "$repo_root"
+  "$script_dir"
