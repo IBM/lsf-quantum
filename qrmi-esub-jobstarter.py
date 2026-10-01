@@ -2145,6 +2145,57 @@ def acquire_quantum_resource(resource, device):
     return token
 
 
+def post_qrmi_resource_id(device, qpu_type, acquisition_token):
+    """Post the selected resource and acquisition ID to LSF message index 1."""
+    def warn(reason):
+        print(
+            f"[WARNING] Cannot post QRMI acquisition ID to LSF: {reason}",
+            file=sys.stderr,
+        )
+
+    job_id = os.environ.get("LSB_JOBID", "")
+    job_index = os.environ.get("LSB_JOBINDEX", "0")
+
+    if not job_id.isdigit() or int(job_id) <= 0:
+        warn("missing or invalid LSB_JOBID")
+        return
+
+    if not job_index.isdigit():
+        warn("invalid LSB_JOBINDEX")
+        return
+
+    job_reference = job_id
+    if int(job_index) > 0:
+        job_reference = f"{job_id}[{int(job_index)}]"
+
+    try:
+        message = json.dumps(
+            {
+                "qrmi_resource": device,
+                "qrmi_resource_type": qpu_type,
+                "qrmi_acquisition_id": acquisition_token,
+            },
+            separators=(",", ":"),
+        )
+        result = subprocess.run(
+            ["bpost", "-i", "1", "-d", message, job_reference],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+            check=False,
+        )
+    except FileNotFoundError:
+        warn("bpost is unavailable")
+    except subprocess.TimeoutExpired:
+        warn("bpost timed out")
+    except (OSError, TypeError, ValueError):
+        warn("message could not be posted")
+    else:
+        if result.returncode != 0:
+            warn(f"bpost exited with status {result.returncode}")
+
+
 def release_quantum_resource(resource, device, token):
     """Release the QRMI resource and remove its acquisition token."""
     try:
@@ -2483,9 +2534,10 @@ if device is not None:
     )
     acquisition_token = acquire_quantum_resource(resource, device)
 
-    job_env = job_environment(env_before_enumeration, device)
-
     try:
+        post_qrmi_resource_id(device, qpu_type, acquisition_token)
+        job_env = job_environment(env_before_enumeration, device)
+
         # Launch the job
         subprocess.run(job_args, env=job_env)
     finally:
@@ -2601,12 +2653,12 @@ acquisition_token = acquire_quantum_resource(
     best_device,
 )
 
-# Build the job's environment explicitly, dropping the per-backend variables
-# QRMI injected for the backends it enumerated but we did not select. They live
-# in the C-level environment, so they cannot be removed via os.environ.
-job_env = job_environment(env_before_enumeration, best_device)
-
 try:
+    post_qrmi_resource_id(best_device, qpu_type, acquisition_token)
+
+    # Drop environment variables for backends that were not selected.
+    job_env = job_environment(env_before_enumeration, best_device)
+
     # Launch the job
     return_code = subprocess.run(job_args, env=job_env).returncode
 finally:
