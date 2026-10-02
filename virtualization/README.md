@@ -30,3 +30,7 @@ bhosts
 HOST_NAME          STATUS       JL/U    MAX  NJOBS    RUN  SSUSP  USUSP    RSV
 lsfmaster          ok              -      4      0      0      0      0      0
 ```
+
+## Apptainer
+
+See [the Apptainer workflow](README.Apptainer.md) for native LSF image builds, isolated execution, and the mounted Bell example.

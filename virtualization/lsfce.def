@@ -1,0 +1,116 @@
+Bootstrap: docker
+From: rockylinux:9
+
+# (C) Copyright 2025-2026 IBM. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+# Adapted from the repository Dockerfile for native Apptainer builds.
+
+%arguments
+    LSFDISTRO=lsfsce10.2.0.15-x86_64
+    LSFINSTALLER=lsf10.1_lsfinstall_linux_x86_64.tar.Z
+
+%labels
+    Description "IBM Spectrum LSF CE with QRMI integration"
+
+%files
+    {{ REPO_ROOT }}/virtualization/apptainer-entrypoint.sh /usr/local/bin/apptainer-entrypoint.sh
+    {{ LSFTARFILE }} /opt/lsf-build/distribution.tar.Z
+    {{ REPO_ROOT }}/virtualization/install.config /opt/lsf-build/install.config
+    {{ REPO_ROOT }}/virtualization/lsf-entrypoint.sh /usr/local/bin/lsf-entrypoint.sh
+    {{ REPO_ROOT }}/qrmi-esub-jobstarter.py /opt/lsf-build/qrmi-esub-jobstarter.py
+    {{ REPO_ROOT }}/elim.qpu /opt/lsf-build/elim.qpu
+
+%post
+    set -eu
+
+    dnf -y update
+    dnf -y install \
+        java-17-openjdk-headless ed hostname which procps-ng \
+        net-tools iproute tar gzip unzip sudo passwd \
+        openssh-clients openssh-server perl ksh tcsh rsync \
+        libnsl libtirpc findutils libxcrypt-compat wget
+
+    dnf -y --enablerepo=crb install \
+        python3.11 python3.11-pip python3.11-devel \
+        gcc-gfortran openblas-devel lapack-devel
+    dnf clean all
+
+    useradd -m lsfadmin
+    mkdir -p /opt/lsf
+
+    export JAVA_HOME=/usr/lib/jvm/jre-17-openjdk
+    export PATH="$JAVA_HOME/bin:$PATH"
+
+    cd /opt/lsf-build
+    tar zxf distribution.tar.Z
+    cd "/opt/lsf-build/{{ LSFDISTRO }}/lsf"
+    tar zxf "{{ LSFINSTALLER }}"
+
+    sed -i \
+        's@^[[:space:]]*LSF_TARDIR=.*@LSF_TARDIR="/opt/lsf-build/{{ LSFDISTRO }}/lsf/"@' \
+        /opt/lsf-build/install.config
+
+    cd lsf10.1_lsfinstall
+    ./lsfinstall -f /opt/lsf-build/install.config
+
+    python3.11 -m venv /opt/qrmi-venv
+    /opt/qrmi-venv/bin/python -m pip install --no-cache-dir \
+        "qrmi[ibm]==0.25.1" python-dotenv omegaconf
+    /opt/qrmi-venv/bin/python -m pip check
+    /opt/qrmi-venv/bin/python -m pip freeze > /opt/qrmi-packages.txt
+
+    serverdir=$(find /opt/lsf/10.1 \
+        -mindepth 2 -maxdepth 2 -type d -name etc -print -quit)
+    test -n "$serverdir"
+
+    install -m 755 /opt/lsf-build/qrmi-esub-jobstarter.py \
+        "$serverdir/qrmi-esub-jobstarter.py"
+    install -m 755 /opt/lsf-build/elim.qpu "$serverdir/elim.qpu"
+
+    sed -i '1c#!/opt/qrmi-venv/bin/python' \
+        "$serverdir/qrmi-esub-jobstarter.py" "$serverdir/elim.qpu"
+
+    ln -s qrmi-esub-jobstarter.py "$serverdir/esub.qrmi"
+    ln -s qrmi-esub-jobstarter.py "$serverdir/jobstarter.qrmi"
+
+    queues=/opt/lsf/conf/lsbatch/lsfce/configdir/lsb.queues
+    test -f "$queues"
+    printf '\nBegin Queue\nQUEUE_NAME = quantum_test\nPRIORITY = 30\nJOB_STARTER = %s/jobstarter.qrmi\nDESCRIPTION = QRMI quantum queue\nEnd Queue\n' \
+        "$serverdir" >> "$queues"
+
+    chmod 755 /usr/local/bin/lsf-entrypoint.sh
+    chmod 755 /usr/local/bin/apptainer-entrypoint.sh
+    mkdir -p /examples /credentials /results
+
+    printf '%s\n' '. /opt/lsf/conf/profile.lsf' >> /etc/profile
+
+    cd /
+    rm -rf /opt/lsf-build
+
+%environment
+    export LSF_TOP=/opt/lsf
+    export JAVA_HOME=/usr/lib/jvm/jre-17-openjdk
+    export PATH="/opt/qrmi-venv/bin:$JAVA_HOME/bin:$PATH"
+    export PYTHONUNBUFFERED=1
+
+%runscript
+    if [ "$#" -eq 0 ]; then
+        set -- bash
+    fi
+    exec /usr/local/bin/apptainer-entrypoint.sh "$@"
+
+%test
+    set -eu
+    /opt/qrmi-venv/bin/python -c \
+        'import qrmi, dotenv, omegaconf; print("QRMI imports: PASS")'
+    /opt/qrmi-venv/bin/python -m pip check
+
+    serverdir=$(find /opt/lsf/10.1 \
+        -mindepth 2 -maxdepth 2 -type d -name etc -print -quit)
+    test -x "$serverdir/esub.qrmi"
+    test -x "$serverdir/jobstarter.qrmi"
+    test -x "$serverdir/elim.qpu"
+
+    grep -q '^QUEUE_NAME = quantum_test$' \
+        /opt/lsf/conf/lsbatch/lsfce/configdir/lsb.queues
+    echo "Baked quantum queue: PASS"
