@@ -19,3 +19,14 @@ sampler_input_ibm_kingston_params_only.json
 166.out
 ```
 where `166.out` has stdout and stderr outputs from job <166>.
+
+
+## Bell circuit through LSF and QRMI
+
+`bell_test.py` submits a two-qubit Bell circuit with 128 shots using
+QRMI SamplerV2 and the resource environment supplied by jobstarter.qrmi.
+It retrieves measurement counts and checks that their total is 128.
+
+See [the container quantum workflow](../Docker/README.md#running-a-quantum-job)
+for building, mounting this directory, credentials, and submission.
+This example submits a real quantum hardware job.
