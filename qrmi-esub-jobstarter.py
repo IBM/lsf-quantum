@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # (C) Copyright 2025-2026 IBM. All Rights Reserved.
+# Modified to preserve explicit-device application exit codes.
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
@@ -2487,7 +2488,7 @@ if device is not None:
 
     try:
         # Launch the job
-        subprocess.run(job_args, env=job_env)
+        return_code = subprocess.run(job_args, env=job_env).returncode
     finally:
         release_quantum_resource(
             resource,
@@ -2495,7 +2496,7 @@ if device is not None:
             acquisition_token,
         )
 
-    sys.exit(0)
+    sys.exit(return_code)
 
 # Validate the QRMI configuration. No IAM access token is generated here:
 # QRMI acquires and renews the bearer token internally on each call.
