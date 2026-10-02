@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # (C) Copyright 2025-2026 IBM. All Rights Reserved.
+# Modified to preserve credential-file paths and correct diagnostics.
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
@@ -933,7 +934,7 @@ def read_config_file(cfile):
     """
     Read config file
     """
-    env_file = os.getcwd() + "/" + cfile.name
+    env_file = os.path.abspath(os.fspath(cfile))
     if not os.path.isfile(env_file):
         message = "File %s does not exist." % env_file
         print(message, file=sys.stderr)
@@ -2446,7 +2447,7 @@ if identity == "esub":
 
     creds = read_config_file(config.file)
     if not creds:
-        print_error("Cannot read credentials file {credentials_file.name}")
+        print_error(f"Cannot read credentials file {config.file}")
 
     transfer_vars_lsf(creds, vars(config))
     print_debug("Passed creds and requests to a jobstarter.")
