@@ -8,7 +8,7 @@
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-FROM rockylinux:9
+FROM docker.io/library/rockylinux:9
 
 ARG LSFTARFILE=""
 ARG LSFINSTALLER=""
@@ -89,6 +89,16 @@ RUN bash -c 'set -eux; \
     ln -s qrmi-esub-jobstarter.py "$LSF_SERVERDIR/jobstarter.qrmi"' \
  && rm -rf /tmp/lsf-quantum \
  && /opt/qrmi-venv/bin/python -c "import qrmi, dotenv, omegaconf"
+
+# Configure the quantum queue in the image.
+RUN bash -c 'set -eu; \
+    serverdir="$(find /opt/lsf/10.1 -mindepth 2 -maxdepth 2 -type d -name etc -print -quit)"; \
+    test -x "$serverdir/jobstarter.qrmi"; \
+    queues=/opt/lsf/conf/lsbatch/lsfce/configdir/lsb.queues; \
+    test -f "$queues"; \
+    printf "\nBegin Queue\nQUEUE_NAME = quantum_test\nPRIORITY = 30\nJOB_STARTER = %s/jobstarter.qrmi\nDESCRIPTION = QRMI quantum queue\nEnd Queue\n" "$serverdir" >> "$queues"'
+
+WORKDIR /home/lsfadmin
 
 RUN printf '%s\n' '. /opt/lsf/conf/profile.lsf' >> /etc/profile
 

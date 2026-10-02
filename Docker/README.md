@@ -6,7 +6,7 @@ Build on amd64 with Docker:
 
     CONTAINER_ENGINE=docker ./Docker/build_podman.sh amd64 10.2.0.15
 
-Start with hostname lsfmaster. Configure the QPU queue, resource map, and credentials at runtime.
+Start with hostname lsfmaster. The image includes quantum_test. Supply credentials at runtime; configure resource mappings separately for ELIM.
 
 ## LSF-QRMI integration verification
 
@@ -37,10 +37,13 @@ For Podman, replace `docker` with `podman`.
 
 ### Start the container
 
+Run from the repository root. The examples mount is read-only; `:z` permits shared container access on SELinux hosts.
+
 ```bash
 docker run --rm -d \
   --name lsf-qrmi-demo \
   --hostname lsfmaster \
+  -v "$PWD/examples:/opt/lsf-quantum-examples:ro,z" \
   localhost/lsf-ce:latest sleep infinity
 
 docker logs lsf-qrmi-demo
@@ -81,81 +84,21 @@ docker exec lsf-qrmi-demo bash -c '
 '
 ```
 
-### Configure a quantum queue
+### Check the quantum queue and mounted example
 
-Create a queue whose jobstarter is the installed QRMI integration script:
+The image includes `quantum_test`, configured with `jobstarter.qrmi`.
+No runtime queue editing or reconfiguration is needed.
 
-```bash
-docker exec lsf-qrmi-demo bash -c '
-  set -e
-  serverdir=$(find /opt/lsf/10.1 -mindepth 2 -maxdepth 2 \
-    -type d -name etc -print -quit)
-  test -x "$serverdir/jobstarter.qrmi"
-  queues=/opt/lsf/conf/lsbatch/lsfce/configdir/lsb.queues
+Check the queue:
 
-  if ! grep -qE "^QUEUE_NAME[[:space:]]*=[[:space:]]*quantum_test[[:space:]]*$" "$queues"; then
-    cp -p "$queues" "$queues.before-quantum-test"
-    printf "\nBegin Queue\nQUEUE_NAME = quantum_test\nPRIORITY = 30\nJOB_STARTER = %s/jobstarter.qrmi\nDESCRIPTION = QRMI quantum test queue\nEnd Queue\n" \
-      "$serverdir" >> "$queues"
-  fi
-'
+    docker exec -u lsfadmin lsf-qrmi-demo bash -lc '. /opt/lsf/conf/profile.lsf; bqueues -l quantum_test'
 
-docker exec -u lsfadmin lsf-qrmi-demo bash -lc '
-  . /opt/lsf/conf/profile.lsf
-  badmin ckconfig && badmin reconfig
-'
-```
+Check the mounted example:
 
-Reconfiguration is asynchronous. Check that the queue is available before
-submitting:
+    docker exec -u lsfadmin lsf-qrmi-demo test -r /opt/lsf-quantum-examples/bell_test.py
 
-```bash
-docker exec -u lsfadmin lsf-qrmi-demo bash -lc \
-  '. /opt/lsf/conf/profile.lsf; bqueues quantum_test'
-```
-
-### Create the quantum application
-
-The following application submits a two-qubit Bell circuit with 128 shots.
-The jobstarter supplies the selected resource and its authenticated
-environment; the application uses that resource through QRMI.
-
-```bash
-docker exec -i -u lsfadmin lsf-qrmi-demo \
-  /opt/qrmi-venv/bin/python - <<'PY'
-from pathlib import Path
-
-Path("/home/lsfadmin/bell_test.py").write_text("""
-import os
-from qiskit import QuantumCircuit
-from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
-from qrmi import QuantumResource, ResourceType
-from qrmi.primitives.ibm import SamplerV2, get_target
-
-device = os.environ["QRMI_JOB_QPU_RESOURCES"]
-assert os.environ["QRMI_JOB_QPU_TYPES"] == "ibm-quantum-compute-service"
-resource = QuantumResource(device, ResourceType.IBMQuantumComputeService)
-
-circuit = QuantumCircuit(2)
-circuit.h(0)
-circuit.cx(0, 1)
-circuit.measure_all()
-
-target = get_target(resource)
-isa = generate_preset_pass_manager(
-    optimization_level=1, target=target
-).run(circuit)
-
-job = SamplerV2(resource).run([isa], shots=128)
-print("Quantum job ID:", job.job_id(), flush=True)
-result = job.result()
-counts = result[0].data.meas.get_counts()
-print("Counts:", counts, flush=True)
-assert sum(counts.values()) == 128
-print("Quantum result verified: 128 shots", flush=True)
-""")
-PY
-```
+The example submits a two-qubit Bell circuit with 128 shots using
+the resource selected by the jobstarter.
 
 ### Submit and inspect the job
 
@@ -169,7 +112,7 @@ docker exec -u lsfadmin -w /home/lsfadmin lsf-qrmi-demo bash -lc '
   bsub -q quantum_test \
     -a "qrmi(file=.env,device=ibm_fez)" \
     -o /home/lsfadmin/bell-test.%J.out \
-    /opt/qrmi-venv/bin/python /home/lsfadmin/bell_test.py
+    /opt/qrmi-venv/bin/python /opt/lsf-quantum-examples/bell_test.py
 '
 ```
 
@@ -227,3 +170,27 @@ docker stop lsf-qrmi-demo
 The `--rm` option removes the container and its runtime credentials,
 configuration, and output files. Copy any results you want to retain
 before stopping it.
+
+### Podman validation
+
+Validated with rootful Podman 5.8.2 on a RHEL x86_64 host.
+AMD64 ran natively; ARM64 and PPC64LE ran under QEMU.
+Each fresh image provided `quantum_test` without runtime queue editing.
+The examples directory was mounted read-only.
+
+All three platforms passed LSF startup, host status, QRMI imports,
+mounted example access, normal hostname job execution, and a Bell
+hardware job through ESUB, JOB_STARTER, and QRMI SamplerV2.
+Every Bell job completed successfully and returned 128 shots.
+
+| Architecture | LSF job | Quantum job ID | Counts (00, 11, 10, 01) |
+| --- | --- | --- | --- |
+| AMD64 | 2 | dav6pdk92g1c7398ddn0 | 55, 65, 5, 3 |
+| ARM64 | 2 | dav7tgdj371s73dmg1m0 | 64, 56, 7, 1 |
+| PPC64LE | 2 | davlipc92g1c73994ueg | 56, 67, 3, 2 |
+
+PPC64LE reported the Power10 libc probe warning described above.
+Its Podman quantum job succeeded without modifying the container profile.
+
+Rootless Podman and native ARM64/PPC64LE execution were not tested.
+Live ELIM metrics were previously verified on AMD64 only.
