@@ -57,6 +57,26 @@ docker exec -u lsfadmin lsf-qrmi-demo bash -lc \
   '. /opt/lsf/conf/profile.lsf; lsid; bhosts; bqueues'
 ```
 
+### Interactive container
+
+Start an interactive shell with Podman:
+
+    podman run --rm -it --hostname lsfmaster localhost/lsf-ce:latest /bin/bash
+
+The entrypoint starts LSF. Switch to the LSF administrator:
+
+    su - lsfadmin
+
+Then run these commands in the new shell:
+
+    . /opt/lsf/conf/profile.lsf
+    lsid
+    bhosts
+    bqueues
+    bsub -K -q normal /bin/hostname
+
+Verified with rootful Podman on AMD64. Rootless Podman was not tested.
+
 ### Supply runtime credentials
 
 Prepare a local `.env` file containing your IBM Quantum configuration:
