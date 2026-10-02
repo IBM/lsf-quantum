@@ -19,3 +19,7 @@ sampler_input_ibm_kingston_params_only.json
 166.out
 ```
 where `166.out` has stdout and stderr outputs from job <166>.
+
+## Apptainer Bell example
+
+`apptainer_bell.py` runs a 128-shot Bell circuit using the resource acquired by the LSF QRMI jobstarter and writes `/results/bell-result.json`. See [the Apptainer instructions](../virtualization/README.Apptainer.md).
