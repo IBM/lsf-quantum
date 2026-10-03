@@ -1,5 +1,14 @@
 .DS_Store
 **/.DS_Store
+Docker/lsfsce*.tar.Z
+Docker/lsfsce*.tar.gz
+Docker/qrmi-esub-jobstarter.py
+Docker/elim.qpu
+
 __pycache__/
 *.py[cod]
 *.sif
+virtualization/lsfsce*.tar.Z
+virtualization/lsfsce*.tar.gz
+virtualization/qrmi-esub-jobstarter.py
+virtualization/elim.qpu
