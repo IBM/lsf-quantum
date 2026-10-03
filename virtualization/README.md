@@ -1,10 +1,10 @@
 # Containerized LSF-QRMI test environment
 
-Place the LSF CE archive in Docker/. Run the build helper from the repository root with Docker or Podman. It uses Docker/ as the build context and stages the current integration scripts for the build. The archive and runtime credentials must not be committed.
+Place the LSF CE archive in virtualization/. Run the build helper from the repository root with Docker or Podman. It uses virtualization/ as the build context and stages the current integration scripts for the build. The archive and runtime credentials must not be committed.
 
 Build on amd64 with Docker:
 
-    CONTAINER_ENGINE=docker ./Docker/build_podman.sh amd64 10.2.0.15
+    CONTAINER_ENGINE=docker ./virtualization/build_podman.sh amd64 10.2.0.15
 
 Start with hostname lsfmaster. The image includes quantum_test. Supply credentials at runtime; configure resource mappings separately for ELIM.
 
@@ -75,7 +75,7 @@ Then run these commands in the new shell:
     bqueues
     bsub -K -q normal /bin/hostname
 
-Verified with rootful Podman on AMD64. Rootless Podman was not tested.
+Verified with rootful Podman on AMD64. Rootless AMD64 testing failed during LSF startup; see the limitation below.
 
 ### Supply runtime credentials
 
@@ -212,5 +212,13 @@ Every Bell job completed successfully and returned 128 shots.
 PPC64LE reported the Power10 libc probe warning described above.
 Its Podman quantum job succeeded without modifying the container profile.
 
-Rootless Podman and native ARM64/PPC64LE execution were not tested.
+Native ARM64/PPC64LE execution was not tested.
 Live ELIM metrics were previously verified on AMD64 only.
+
+## Apptainer
+
+See [the Apptainer workflow](README.Apptainer.md) for native LSF image builds, isolated execution, and the mounted Bell example.
+
+### Rootless Podman limitation
+
+On AMD64, rootless Podman reproduced three startup permission errors. Tracing bctrld showed it reading the UID map, where container root maps to host UID 1000, and immediately returning Permission denied. Direct daemon startup succeeded, but LSF client authentication and job submission failed. Use rootful Podman for this tested full LSF environment. Rootless ARM64 and PPC64LE were not tested.

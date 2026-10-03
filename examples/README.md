@@ -27,6 +27,10 @@ where `166.out` has stdout and stderr outputs from job <166>.
 QRMI SamplerV2 and the resource environment supplied by jobstarter.qrmi.
 It retrieves measurement counts and checks that their total is 128.
 
-See [the container quantum workflow](../Docker/README.md#running-a-quantum-job)
+See [the container quantum workflow](../virtualization/README.md#running-a-quantum-job)
 for building, mounting this directory, credentials, and submission.
 This example submits a real quantum hardware job.
+
+## Apptainer Bell example
+
+`apptainer_bell.py` runs a 128-shot Bell circuit using the resource acquired by the LSF QRMI jobstarter and writes `/results/bell-result.json`. See [the Apptainer instructions](../virtualization/README.Apptainer.md).
