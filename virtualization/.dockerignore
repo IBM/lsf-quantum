@@ -1,0 +1,5 @@
+.git
+**/.env
+**/.env.*
+**/env.qpu
+**/__pycache__
