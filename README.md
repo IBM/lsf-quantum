@@ -384,3 +384,24 @@ For information on how to contribute to this project, please take a look at our 
 1. Quantum Resource Management Interface (QRMI): https://github.com/qiskit-community/qrmi/tree/main
 2. IBM Quantum https://www.ibm.com/quantum
 3. STFC The Hartree Centre, https://www.hartree.stfc.ac.uk. This work was supported by the Hartree National Centre for Digital Innovation (HNCDI) programme.
+
+## QRMI acquisition IDs in LSF job messages
+
+After acquisition, the jobstarter posts JSON to LSF message index 1.
+Explicit-device jobs, automatic selection, and array elements are supported.
+Fields: qrmi_resource, qrmi_resource_type, and qrmi_acquisition_id.
+The acquisition ID is returned by resource.acquire(); for IBM providers
+it identifies the session or batch, rather than an application quantum task.
+Authentication credentials are not included.
+
+Read with `bread -w -i 1 JOB_ID` or
+`bread -w -i 1 'JOB_ID[ARRAY_INDEX]'`.
+
+Reserve index 1: another post at that index can replace the message.
+The execution host needs bpost on PATH. Posting times out after 10 seconds.
+Posting failures warn and allow the application to continue.
+Retrieval after completion depends on LSF job-record retention.
+Permanent archival and quantum result collection are outside this feature.
+
+Run isolated tests without credentials or QPU access:
+`python3 -m unittest discover -s tests -p 'test_qrmi_resource_post.py' -v`
