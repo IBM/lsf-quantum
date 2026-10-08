@@ -394,7 +394,17 @@ Run isolated tests without credentials or QPU access:
 
 ---
 ### How to Cite This Work
-_Vadim Elisseev, Vassilis Kalantzis, Gábor Samu, Ritesh Krishna, Practical Example of Resources-Aware Scheduling of Hybrid Quantum-Classical Workflows, to appear in IEEE QCE26 Proceedings._
+V. Elisseev, V. Kalantzis, G. Samu, and R. Krishna, “Practical Example of Resources-Aware Scheduling of Hybrid Quantum-Classical Workflows,” in 2026 IEEE International Conference on Quantum Computing and Engineering (QCE), 2026, doi: 10.1109/QCE68830.2026.10034.
+
+```
+@inproceedings{elisseev2026resources,
+  author    = {Vadim Elisseev and Vassilis Kalantzis and G{\'a}bor Samu and Ritesh Krishna},
+  title     = {Practical Example of Resources-Aware Scheduling of Hybrid Quantum-Classical Workflows},
+  booktitle = {2026 IEEE International Conference on Quantum Computing and Engineering (QCE)},
+  year      = {2026},
+  doi       = {10.1109/QCE68830.2026.10034}
+}
+```
 
 ### Contribution Guidelines
 For information on how to contribute to this project, please take a look at our [contribution guidelines](CONTRIBUTING.md).
