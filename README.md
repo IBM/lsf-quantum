@@ -371,20 +371,6 @@ bsub -R "select[pending_jobs < 100]" job3_quantum.py
 # Select QPU with the lowest median readout error
 bsub -R "order[readout_error_median]" test_circuit.py
 ```
-
----
-### How to Cite This Work
-_Vadim Elisseev, Vassilis Kalantzis, Gábor Samu, Ritesh Krishna, Practical Example of Resources-Aware Scheduling of Hybrid Quantum-Classical Workflows, to appear in IEEE QCE26 Proceedings._
-
-### Contribution Guidelines
-For information on how to contribute to this project, please take a look at our [contribution guidelines](CONTRIBUTING.md).
-
----
-## References and Acknowledgements
-1. Quantum Resource Management Interface (QRMI): https://github.com/qiskit-community/qrmi/tree/main
-2. IBM Quantum https://www.ibm.com/quantum
-3. STFC The Hartree Centre, https://www.hartree.stfc.ac.uk. This work was supported by the Hartree National Centre for Digital Innovation (HNCDI) programme.
-
 ## QRMI acquisition IDs in LSF job messages
 
 After acquisition, the jobstarter posts JSON to LSF message index 1.
@@ -405,3 +391,16 @@ Permanent archival and quantum result collection are outside this feature.
 
 Run isolated tests without credentials or QPU access:
 `python3 -m unittest discover -s tests -p 'test_qrmi_resource_post.py' -v`
+
+---
+### How to Cite This Work
+_Vadim Elisseev, Vassilis Kalantzis, Gábor Samu, Ritesh Krishna, Practical Example of Resources-Aware Scheduling of Hybrid Quantum-Classical Workflows, to appear in IEEE QCE26 Proceedings._
+
+### Contribution Guidelines
+For information on how to contribute to this project, please take a look at our [contribution guidelines](CONTRIBUTING.md).
+
+---
+## References and Acknowledgements
+1. Quantum Resource Management Interface (QRMI): https://github.com/qiskit-community/qrmi/tree/main
+2. IBM Quantum https://www.ibm.com/quantum
+3. STFC The Hartree Centre, https://www.hartree.stfc.ac.uk. This work was supported by the Hartree National Centre for Digital Innovation (HNCDI) programme.
