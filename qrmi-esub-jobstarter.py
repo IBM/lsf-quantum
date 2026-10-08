@@ -2539,7 +2539,7 @@ if device is not None:
         job_env = job_environment(env_before_enumeration, device)
 
         # Launch the job
-        subprocess.run(job_args, env=job_env)
+        return_code = subprocess.run(job_args, env=job_env).returncode
     finally:
         release_quantum_resource(
             resource,
@@ -2547,7 +2547,8 @@ if device is not None:
             acquisition_token,
         )
 
-    sys.exit(0)
+    # Convert Python's negative signal status to 128 + signal for LSF.
+    sys.exit(128 - return_code if return_code < 0 else return_code)
 
 # Validate the QRMI configuration. No IAM access token is generated here:
 # QRMI acquires and renews the bearer token internally on each call.
@@ -2668,4 +2669,5 @@ finally:
         acquisition_token,
     )
 
-sys.exit(return_code)
+# Convert Python's negative signal status to 128 + signal for LSF.
+sys.exit(128 - return_code if return_code < 0 else return_code)
