@@ -8,11 +8,11 @@ This repository contains implementation of plugins for IBM LSF workload manager 
 ## Overview
 Figure 1 depicts workflow of an LSF job submission using `esub.qrmi` and `jobstarter.qrmi`. 
 
-![LSF job submission](Figure_1.png) 
+![LSF job submission](LSF-QRMI.svg) 
 
 ## Prerequisites
 - Working [IBM Spectrum LSF Suites](https://www.ibm.com/products/hpc-workload-management)  or [LSF Community Edition](https://epwt-www.mybluemix.net/software/support/trial/cst/programwebsite.wss?siteId=680&h=null&p=null) cluster.
-- Account on ![IBM Quantum Platform](https://quantum.ibm.com/) with generated API key and a CRN number.
+- Account on [IBM Quantum Platform](https://quantum.ibm.com/) with generated API key and a CRN number.
 
 ## Deploying esub and jobstarter
 Follow these steps as _root_.
