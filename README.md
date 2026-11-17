@@ -3,7 +3,7 @@
 ## Introduction
 One of the key elements of the hybrid quantum--HPC paradigm is the unified management of workloads and workflows across integrated quantum and high-performance computing (HPC) infrastructure. This in turn requires a corresponding middleware stack, including workload and workflow managers.
 
-This repository contains implementation of plugins for IBM LSF workload manager for handling jobs using ![Quantum Resource Management Interface (QRMI)](https://github.com/qiskit-community/qrmi/tree/main), a vendor agnostic library providing a set of APIs to facilitate deployment of workloads on quantum processing units (QPUs).
+This repository contains implementation of plugins for IBM LSF workload manager for handling jobs using [Quantum Resource Management Interface (QRMI)](https://github.com/qiskit-community/qrmi/tree/main), a vendor agnostic library providing a set of APIs to facilitate deployment of workloads on quantum processing units (QPUs).
 
 ## Overview
 Figure 1 depicts workflow of an LSF job submission using `esub.qrmi` and `jobstarter.qrmi`. 
@@ -15,40 +15,37 @@ Figure 1 depicts workflow of an LSF job submission using `esub.qrmi` and `jobsta
 - Account on [IBM Quantum Platform](https://quantum.ibm.com/) with generated API key and a CRN number.
 
 ## Deploying esub and jobstarter
-Follow these steps as _root_.
-
-1. Install dependencies, assuming that Python 3.11 (or later) is already available.
+1. Install build dependencies. 
 
 For example, on Rocky Linux 9.x:
 ```
-dnf install python3.11-pip
-pip-3 install requests dotenv omegaconf qrmi
-
+sudo dnf install git gcc openssl-devel
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ```
 
-2. Add `esub.qrmi and jobstarter.qrmi` to the existing LSF cluster. 
+**Note:** Rust **1.94.1 or newer** is required -- the `aws-smithy` crates
+reached through QRMI refuse to build below it, so a distribution's packaged
+Rust is not sufficient (Rocky 10 ships 1.92). `rust-toolchain.toml` pins the
+version, so rustup installs it automatically on the first `cargo` command.
+
+2. Build and install `esub.qrmi` and `jobstarter.qrmi`.
+
+A Rust crate name cannot contain a dot, so the artifacts are built under
+hyphenated names and renamed on install.
 ```
-git clone git@github.com:IBM/lsf-quantum.git
+git clone https://github.com/IBM/lsf-quantum.git
 cd lsf-quantum
-cp qrmi-esub-jobstarter.py $LSF_SERVERDIR
-chmod a+xr $LSF_SERVERDIR/qrmi-esub-jobstarter.py
-ln -s $LSF_SERVERDIR/qrmi-esub-jobstarter.py $LSF_SERVERDIR/esub.qrmi
-ln -s $LSF_SERVERDIR/qrmi-esub-jobstarter.py $LSF_SERVERDIR/jobstarter.qrmi
+cargo build --release --locked -p esub-qrmi -p jobstarter-qrmi
+sudo install -m 755 target/release/esub-qrmi       $LSF_SERVERDIR/esub.qrmi
+sudo install -m 755 target/release/jobstarter-qrmi $LSF_SERVERDIR/jobstarter.qrmi
 ```
-Add jobstarter to `$LSF_ENVDIR/lsbatch/<cluster_name>/configdir/lsb.queues:
+As _root_ or LSF cluster admin add jobstarter to `$LSF_ENVDIR/lsbatch/<cluster_name>/configdir/lsb.queues:
 ```
 JOB_STARTER = /opt/lsf/10.1/linux3.10-glibc2.17-x86_64/etc/jobstarter.qrmi
 ```
 
 ## Using esub.qrmi
 
-### Configuring user environment
-Create a virtual environment, for example
-```
-conda create -n lsfqrmi python==3.11
-conda activate lsfqrmi
-pip install -U "qrmi[ibm]" dotenv omegaconf
-```
 ### Submitting jobs
 ```
 Usage:
@@ -73,6 +70,7 @@ Arguments description:
   qpu.readout_error_median   Median readout error on QPU 
 
 Note: device and qpu arguments are mutually exclusive
+Note: selector cannot be combined with device
 
 ``` 
 Submission examples:
@@ -83,10 +81,10 @@ Submission examples:
 ```
 For debugging:
 ```
-      export LSF_ESUB_QRMI_DEBUG=level1 enables debugging messages
-      export LSF_ESUB_QRMI_DEBUG=level2 enables level1 and more 
+      export LSF_QRMI_DEBUG=level1 enables debugging messages
+      export LSF_QRMI_DEBUG=level2 enables level1 and more 
 ```
-Before submitting any jobs to the IBM Quantum Platform prepare an file with template QRMI variables in your $CWD. Refer to ![IBM Quantum Platform documentation](https://quantum.cloud.ibm.com/docs/en/guides/cloud-setup) on how to cerate API key and CRN.
+Before submitting any jobs to the IBM Quantum Platform prepare a file with template QRMI variables in your $CWD. Refer to [IBM Quantum Platform documentation](https://quantum.cloud.ibm.com/docs/en/guides/cloud-setup) on how to create API key and CRN.
 ```
 $ cat .env
 QRMI_IBM_QCS_IAM_APIKEY=<user_api_key>
@@ -110,9 +108,9 @@ ibm_kingston_QRMI_IBM_QCS_SERVICE_CRN=<user_crn>
 ibm_kingston_QRMI_IBM_QCS_ENDPOINT=https://quantum.cloud.ibm.com/api/v1
 ibm_kingston_QRMI_IBM_QCS_SESSION_MODE=batch
 ibm_kingston_QRMI_IBM_QCS_IAM_ENDPOINT=https://iam.cloud.ibm.com
-QRMI_IBM_QRS_BEST_DEVICE=ibm_kingston
+QRMI_IBM_QCS_BEST_DEVICE=ibm_kingston
 ```
-**Note: QRMI_IBM_QRS_BEST_DEVICE is not usedby QRMI and is provided for conveniency.**
+**Note: QRMI_IBM_QCS_BEST_DEVICE is not used by QRMI and is provided for convenience.**
 
 ### Quantum Device Selection
 User can choose different quantum device selection policy.  For example, 
@@ -191,7 +189,11 @@ This ELIM is used to query the IBM Quantum Platform for information on QPUs incl
 - **IBM Spectrum LSF** installed and configured on your cluster nodes (LIM must be running on the hosts where ELIM will execute).
 - **IBM Quantum account** with an **API key** and access to desired backends.
 - Network egress from the LIM/ELIM host(s) to the IBM Quantum API endpoint.
-- Python 3.11+ and **QRMI 0.25.1 or later** installed (`pip install -U "qrmi[ibm]"`).
+- **Rust 1.94.1 or newer** (pinned by `rust-toolchain.toml`; see
+  `crates/lsfq-core/README.md`). A packaged distribution Rust is not
+  sufficient -- the `aws-smithy` crates reached through QRMI require 1.94.1.
+  QRMI 0.26.3 is pinned as a git dependency and built from source; no Python
+  runtime is needed on the ELIM host.
 
 ## Configuration
 
@@ -283,21 +285,35 @@ Before running LSF Elim, you need to map the classical system to the quantum sys
 
 
 ## Install
-<ol>
-<li>Install the required packages on the host where the elim will be run. This corresponds to the LSF classical and QPU mapping that is defined in the LSF configuration. </li>
+
+1. Install the required packages on the host where the elim will be run. This
+corresponds to the LSF classical and QPU mapping that is defined in the LSF
+configuration.
 
 ```bash
-$ pip install "qrmi[ibm]" dotenv
+sudo dnf install git gcc openssl-devel
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ```
 
-<li>As the LSF Administrator user, copy elim.qpu to correct directory and set the execute permissions.</li>
+**Note:** Rust **1.94.1 or newer** is required, as for `esub.qrmi` above --
+the `aws-smithy` crates reached through QRMI refuse to build below it, so a
+distribution's packaged Rust is not sufficient (Rocky 10 ships 1.92).
+`rust-toolchain.toml` pins the version, so rustup installs it automatically
+on the first `cargo` command. If rustup was installed without modifying
+`PATH`, start a new shell or run `source ~/.cargo/env` first.
+
+2. As the LSF Administrator user, build the ELIM and copy it to the correct
+directory. If the repository was already cloned to build `esub.qrmi`, reuse
+that checkout and skip the first two lines.
 
 ```bash
-cp elim.qpu $LSF_SERVERDIR 
-chmod 755 $LSF_SERVERDIR/elim.qpu
+git clone https://github.com/IBM/lsf-quantum.git
+cd lsf-quantum
+cargo build --release --locked -p elim-qpu
+sudo install -m 755 target/release/elim-qpu $LSF_SERVERDIR/elim.qpu
 ```
 
-<li>Create the env.qpu file containing the CRN and API key. This information may be obtained from the IBM Quantum Platform dashboard for a given user account. Note that this information is essential to enable the correct operation of elim.qpu. Note that this assumes that host on which elim.qpu is executing has access to the IBM Quantum Platform. The file should be owned by the LSF Administrator user with permissions octal 400.</li>
+3. Create the env.qpu file containing the CRN and API key. This information may be obtained from the IBM Quantum Platform dashboard for a given user account. Note that this information is essential to enable the correct operation of elim.qpu. Note that this assumes that host on which elim.qpu is executing has access to the IBM Quantum Platform. The file should be owned by the LSF Administrator user with permissions octal 400.
 
 ```bash
 $LSF_ENVDIR/env.qpu
@@ -308,7 +324,7 @@ QRMI_IBM_QCS_ENDPOINT=https://quantum.cloud.ibm.com/api/v1
 QRMI_IBM_QCS_IAM_ENDPOINT=https://iam.cloud.ibm.com
 ```
 
-<li>Test the correct operation of the elim.</li>
+4. Test the correct operation of the elim.
 
 ```bash
 $ $LSF_SERVERDIR/elim.qpu
@@ -319,14 +335,14 @@ $ $LSF_SERVERDIR/elim.qpu
 ....
 ```
 
-<li>Put the elim into operation by reconfiguring LSF.</li>
+5. Put the elim into operation by reconfiguring LSF.
 
 ```bash
 lsadmin reconfig
 badmin reconfig
 ```
 
-<li>Verify the correct operation of the elim. In this case, the elim is configured to exit on startup if it is executed on an LSF host for which there is no mapping defined. Here we look at host lsf-manager-002 which has been mapped to QPU *ibm_fez*.</li>
+6. Verify the correct operation of the elim. In this case, the elim is configured to exit on startup if it is executed on an LSF host for which there is no mapping defined. Here we look at host lsf-manager-002 which has been mapped to QPU *ibm_fez*.
 
 ```bash
 $ lsinfo |grep ibm_fez
@@ -371,26 +387,6 @@ bsub -R "select[pending_jobs < 100]" job3_quantum.py
 # Select QPU with the lowest median readout error
 bsub -R "order[readout_error_median]" test_circuit.py
 ```
-## QRMI acquisition IDs in LSF job messages
-
-After acquisition, the jobstarter posts JSON to LSF message index 1.
-Explicit-device jobs, automatic selection, and array elements are supported.
-Fields: qrmi_resource, qrmi_resource_type, and qrmi_acquisition_id.
-The acquisition ID is returned by resource.acquire(); for IBM providers
-it identifies the session or batch, rather than an application quantum task.
-Authentication credentials are not included.
-
-Read with `bread -w -i 1 JOB_ID` or
-`bread -w -i 1 'JOB_ID[ARRAY_INDEX]'`.
-
-Reserve index 1: another post at that index can replace the message.
-The execution host needs bpost on PATH. Posting times out after 10 seconds.
-Posting failures warn and allow the application to continue.
-Retrieval after completion depends on LSF job-record retention.
-Permanent archival and quantum result collection are outside this feature.
-
-Run isolated tests without credentials or QPU access:
-`python3 -m unittest discover -s tests -p 'test_qrmi_resource_post.py' -v`
 
 ---
 ### How to Cite This Work
@@ -414,3 +410,24 @@ For information on how to contribute to this project, please take a look at our 
 1. Quantum Resource Management Interface (QRMI): https://github.com/qiskit-community/qrmi/tree/main
 2. IBM Quantum https://www.ibm.com/quantum
 3. STFC The Hartree Centre, https://www.hartree.stfc.ac.uk. This work was supported by the Hartree National Centre for Digital Innovation (HNCDI) programme.
+
+## QRMI acquisition IDs in LSF job messages
+
+After acquisition, the jobstarter posts JSON to LSF message index 1.
+Explicit-device jobs, automatic selection, and array elements are supported.
+Fields: qrmi_resource, qrmi_resource_type, and qrmi_acquisition_id.
+The acquisition ID is returned by resource.acquire(); for IBM providers
+it identifies the session or batch, rather than an application quantum task.
+Authentication credentials are not included.
+
+Read with `bread -w -i 1 JOB_ID` or
+`bread -w -i 1 'JOB_ID[ARRAY_INDEX]'`.
+
+Reserve index 1: another post at that index can replace the message.
+The execution host needs bpost on PATH. Posting times out after 10 seconds.
+Posting failures warn and allow the application to continue.
+Retrieval after completion depends on LSF job-record retention.
+Permanent archival and quantum result collection are outside this feature.
+
+Run isolated tests without credentials or QPU access:
+`python3 -m unittest discover -s tests -p 'test_qrmi_resource_post.py' -v`

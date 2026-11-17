@@ -1,0 +1,21 @@
+# (C) Copyright 2025-2026 IBM. All Rights Reserved.
+#
+# This code is licensed under the Apache License, Version 2.0.
+#
+# Pins the toolchain so a clone builds without first discovering the hard
+# requirement by hitting cargo's error.
+#
+# 1.94.1 is not a preference. The aws-smithy crates reached transitively
+# through QRMI (aws-sdk-s3 <- quantum-system-api <- qrmi) declare
+# rust-version = "1.94.1", and cargo refuses to build the workspace at all
+# below that -- elim-qpu and jobstarter-qrmi cannot be compiled, so no
+# distribution's packaged Rust is sufficient (Rocky 10 ships 1.92).
+#
+# rustup reads this file and installs the toolchain on demand. Raise the
+# channel when the dependency floor rises; if QRMI ever loosens its
+# aws-sdk-s3 bound, this pin and the matching rust-version in Cargo.toml can
+# both come down.
+
+[toolchain]
+channel = "1.94.1"
+components = ["clippy", "rustfmt"]

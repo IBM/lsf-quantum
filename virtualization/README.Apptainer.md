@@ -65,6 +65,8 @@ Inside the container, after LSF is ready:
 
     su -s /bin/bash lsfadmin
     source /opt/lsf/conf/profile.lsf
+    # The venv is for the Qiskit workload below; the LSF integration
+    # binaries are native Rust and do not use it.
     export PATH="/opt/qrmi-venv/bin:$PATH"
     cd /credentials
 

@@ -1,0 +1,27 @@
+# (C) Copyright 2025-2026 IBM. All Rights Reserved.
+#
+# This code is licensed under the Apache License, Version 2.0. You may
+# obtain a copy of this license in the LICENSE.txt file in the root directory
+# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+
+[package]
+name = "qpu-select"
+description = "Vendor-neutral QPU selection policies for HPC schedulers"
+keywords = ["quantum", "scheduler", "qpu", "selection"]
+categories = ["science"]
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# Deliberately empty. This crate is a pure function from metrics plus a
+# request to a decision: no QRMI, no LSF, no HTTP, no async runtime, no
+# environment access. That is what makes it reusable outside lsf-quantum,
+# and what keeps its tests hermetic. Do not add a dependency here without
+# a strong reason.
+[dependencies]
+
+[lints]
+workspace = true
