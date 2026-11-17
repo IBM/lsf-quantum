@@ -1,0 +1,201 @@
+F ibm_a0 qubits=120 clops=100000.0 T1_median_us=212.99 T2_median_us=135.01 processor_type=Nighthawk:2
+F ibm_b3 qubits=156 clops=100000.0 pending_jobs=679 T1_median_us=191.86 readout_error_median=0.04941 T2_median_us=169.83 processor_type=Nighthawk:1
+F ibm_c5 qubits=200 clops=240000.0 pending_jobs=679 T1_median_us=205.14 readout_error_median=0.01539
+---
+F ibm_a1 qubits=27 clops=100000.0 pending_jobs=42 readout_error_median=0.04276 processor_type=Heron:1
+F ibm_b6 qubits=120 clops=320000.0 pending_jobs=0 T1_median_us=229.36 readout_error_median=0.03862 T2_median_us=86.1
+---
+F ibm_a3 qubits=127 clops=100000.0 pending_jobs=124 T1_median_us=80.71 readout_error_median=0.02609 processor_type=Heron:3
+F ibm_b4 qubits=27 clops=100000.0 pending_jobs=0 T1_median_us=82.15 readout_error_median=0.02447
+F ibm_c4 clops=320000.0 T1_median_us=115.55 readout_error_median=0.02591 T2_median_us=155.09
+F ibm_d2 qubits=127 clops=195000.0 pending_jobs=3 readout_error_median=0.00369 T2_median_us=198.15
+F ibm_e3 qubits=200 clops=195000.0 pending_jobs=3 T1_median_us=91.36 readout_error_median=0.01291
+F ibm_f6 qubits=27 clops=320000.0 pending_jobs=42 readout_error_median=0.03399
+---
+F ibm_a7 qubits=127 clops=195000.0 pending_jobs=1 processor_type=Nighthawk:2
+F ibm_b2 qubits=27 pending_jobs=0 readout_error_median=0.02804
+F ibm_c2 qubits=156 clops=195000.0 pending_jobs=3 readout_error_median=0.00904 T2_median_us=138.99
+F ibm_d5 qubits=127 clops=240000.0 pending_jobs=124 T1_median_us=240.01 readout_error_median=0.04531 T2_median_us=124.98
+---
+F ibm_a6 qubits=27 clops=320000.0 pending_jobs=124 T1_median_us=241.12 readout_error_median=0.01428 T2_median_us=145.76
+F ibm_b9 qubits=120 clops=320000.0 pending_jobs=42 readout_error_median=0.00658 T2_median_us=158.75 processor_type=Heron:1
+F ibm_c9 qubits=156 clops=100000.0 pending_jobs=1 readout_error_median=0.01351 processor_type=Eagle:1
+F ibm_d0 qubits=156 pending_jobs=679 T1_median_us=130.05 T2_median_us=79.35
+F ibm_e6 clops=320000.0 pending_jobs=679 T1_median_us=157.85 readout_error_median=0.00588 processor_type=Eagle:1
+---
+F ibm_a4 qubits=120 clops=100000.0
+F ibm_b7 qubits=27 clops=240000.0 pending_jobs=124 readout_error_median=0.01229 processor_type=Eagle:3
+F ibm_c9 qubits=120 clops=195000.0 pending_jobs=1 readout_error_median=0.00616
+F ibm_d0 qubits=156 clops=100000.0 pending_jobs=1 T1_median_us=133.59 readout_error_median=0.0361 T2_median_us=156.55 processor_type=Heron:2
+F ibm_e8 qubits=120 clops=195000.0 pending_jobs=679 readout_error_median=0.00861
+F ibm_f9 qubits=27 clops=400000.0 T1_median_us=158.87 T2_median_us=63.31 processor_type=Nighthawk:3
+---
+F ibm_a1 qubits=27 pending_jobs=42 T1_median_us=135.15 readout_error_median=0.01948 T2_median_us=89.64
+F ibm_b0 qubits=120 clops=195000.0 pending_jobs=1 T1_median_us=105.94 readout_error_median=0.03836 T2_median_us=160.35 processor_type=Heron:1
+F ibm_c3 qubits=27 clops=195000.0 T1_median_us=188.58 readout_error_median=0.02442 T2_median_us=71.61 processor_type=Nighthawk:3
+F ibm_d6 qubits=127 clops=100000.0 pending_jobs=124 T1_median_us=168.49 readout_error_median=0.02347 T2_median_us=184.91
+F ibm_e3 qubits=127 clops=400000.0 pending_jobs=3 readout_error_median=0.00128 T2_median_us=140.06
+F ibm_f2 clops=400000.0 pending_jobs=0 T1_median_us=103.24 readout_error_median=0.01183 T2_median_us=62.27
+---
+F ibm_a0 qubits=127 clops=100000.0 pending_jobs=0 T1_median_us=176.85 processor_type=Eagle:3
+F ibm_b4 qubits=200 clops=100000.0 pending_jobs=435 T1_median_us=220.66 T2_median_us=69.08
+---
+F ibm_a6 qubits=127 clops=400000.0 pending_jobs=3 readout_error_median=0.04469 T2_median_us=137.83 processor_type=Nighthawk:1
+---
+F ibm_a2 qubits=27 clops=100000.0 T1_median_us=131.99 T2_median_us=80.18
+F ibm_b7 qubits=120 pending_jobs=42 T1_median_us=177.83 readout_error_median=0.03999 T2_median_us=179.03
+---
+F ibm_a8 qubits=156 clops=400000.0 pending_jobs=679 T1_median_us=95.16 readout_error_median=0.03411 T2_median_us=139.34
+F ibm_b0 qubits=27 clops=320000.0 T1_median_us=154.05 T2_median_us=186.72 processor_type=Eagle:1
+F ibm_c5 clops=195000.0 pending_jobs=679
+---
+F ibm_a4 qubits=200 clops=400000.0 pending_jobs=1 readout_error_median=0.01445
+---
+F ibm_a1 qubits=127 pending_jobs=1 T1_median_us=172.81 readout_error_median=0.01115 T2_median_us=112.52
+F ibm_b5 qubits=127 clops=100000.0 pending_jobs=435 readout_error_median=0.02705 T2_median_us=64.44
+F ibm_c0 qubits=120 pending_jobs=435 T1_median_us=157.49 readout_error_median=0.007 T2_median_us=148.11 processor_type=Eagle:1
+---
+F ibm_a2 qubits=200 clops=195000.0 pending_jobs=124 T1_median_us=191.23 readout_error_median=0.04822 T2_median_us=90.81
+F ibm_b6 qubits=120 clops=400000.0 pending_jobs=0 T1_median_us=152.97 readout_error_median=0.03305
+F ibm_c1 qubits=156 clops=240000.0 pending_jobs=124 readout_error_median=0.00991 T2_median_us=163.48
+F ibm_d8 qubits=127 clops=400000.0 pending_jobs=0 T1_median_us=155.38 readout_error_median=0.00809 T2_median_us=132.31 processor_type=Eagle:2
+---
+F ibm_a0 qubits=156 clops=320000.0 pending_jobs=42 readout_error_median=0.00436 T2_median_us=178.5 processor_type=Heron:1
+F ibm_b6 clops=195000.0 pending_jobs=42 T1_median_us=248.9
+F ibm_c3 qubits=120 clops=195000.0 T1_median_us=225.55 T2_median_us=90.13 processor_type=Eagle:1
+F ibm_d9 qubits=127 readout_error_median=0.0062 T2_median_us=178.08
+F ibm_e9 qubits=27 clops=320000.0 pending_jobs=679 T1_median_us=191.25 readout_error_median=0.03663 T2_median_us=111.15
+---
+F ibm_a4 qubits=200 clops=320000.0 pending_jobs=435 T1_median_us=135.07 readout_error_median=0.03335 processor_type=Nighthawk:2
+F ibm_b7 qubits=27 clops=320000.0 pending_jobs=42 T1_median_us=115.96 readout_error_median=0.03821 T2_median_us=174.54
+---
+F ibm_a9 qubits=127 T1_median_us=213.69 readout_error_median=0.01141 T2_median_us=146.95
+F ibm_b5 qubits=156 clops=100000.0 pending_jobs=1 T1_median_us=203.73 readout_error_median=0.00779
+---
+F ibm_a5 qubits=156 clops=240000.0 pending_jobs=42 T1_median_us=93.61 readout_error_median=0.0348 T2_median_us=67.7
+F ibm_b6 qubits=200 clops=100000.0 pending_jobs=3 T1_median_us=204.87 readout_error_median=0.04908 processor_type=Eagle:3
+F ibm_c3 qubits=156 clops=100000.0 pending_jobs=1 T1_median_us=136.38 readout_error_median=0.04087 T2_median_us=62.32 processor_type=Nighthawk:3
+F ibm_d8 qubits=120 clops=240000.0 pending_jobs=435 T1_median_us=109.22 readout_error_median=0.04576 T2_median_us=194.51 processor_type=Heron:1
+F ibm_e3 qubits=27 clops=320000.0 pending_jobs=1 T1_median_us=87.29 readout_error_median=0.0198 T2_median_us=99.21
+---
+F ibm_a6 qubits=27 clops=320000.0 pending_jobs=1 readout_error_median=0.01764 T2_median_us=52.84
+F ibm_b0 qubits=27 clops=320000.0 pending_jobs=435 T1_median_us=246.29 readout_error_median=0.005 T2_median_us=79.43 processor_type=Nighthawk:2
+---
+F ibm_a0 qubits=120 clops=195000.0 pending_jobs=42 processor_type=Heron:1
+---
+F ibm_a8 qubits=156 clops=320000.0 pending_jobs=679 T1_median_us=240.18 readout_error_median=0.03373 T2_median_us=138.93 processor_type=Eagle:1
+F ibm_b6 clops=400000.0 T1_median_us=213.82 processor_type=Nighthawk:2
+F ibm_c8 qubits=127 clops=240000.0 pending_jobs=3 T1_median_us=240.47 readout_error_median=0.03586
+F ibm_d5 qubits=156 clops=100000.0 pending_jobs=3 readout_error_median=0.01117
+---
+F ibm_a5 qubits=27 clops=400000.0 pending_jobs=124 T1_median_us=203.46
+F ibm_b9 qubits=156 clops=240000.0 pending_jobs=679 T1_median_us=223.04 readout_error_median=0.00362
+F ibm_c4 qubits=27 clops=240000.0 pending_jobs=435 T1_median_us=233.45 readout_error_median=0.04259
+F ibm_d8 qubits=120 clops=100000.0 pending_jobs=679 T1_median_us=131.34 T2_median_us=181.76 processor_type=Heron:3
+---
+F ibm_a6 qubits=156 clops=320000.0 pending_jobs=1 T1_median_us=249.76 T2_median_us=62.61 processor_type=Heron:2
+F ibm_b0 qubits=120 clops=100000.0 pending_jobs=42 readout_error_median=0.03883 T2_median_us=65.46
+F ibm_c6 qubits=127 clops=195000.0 pending_jobs=124 T1_median_us=220.16 readout_error_median=0.03833 T2_median_us=99.86 processor_type=Eagle:1
+---
+F ibm_a0 clops=100000.0 pending_jobs=3 readout_error_median=0.03114 T2_median_us=50.3
+F ibm_b7 qubits=156 readout_error_median=0.02152 T2_median_us=175.01 processor_type=Eagle:3
+---
+F ibm_a9 qubits=120 clops=100000.0 T1_median_us=130.65 readout_error_median=0.01855 T2_median_us=132.99 processor_type=Heron:3
+F ibm_b5 qubits=120 clops=195000.0 T1_median_us=100.06 readout_error_median=0.0495
+F ibm_c5 qubits=156 clops=240000.0 T1_median_us=166.77 readout_error_median=0.01205 T2_median_us=193.07
+---
+F ibm_a1 qubits=200 pending_jobs=124 T1_median_us=147.77 T2_median_us=58.86 processor_type=Nighthawk:2
+---
+F ibm_a2 qubits=127 clops=100000.0 pending_jobs=1 T1_median_us=194.81 readout_error_median=0.02942 T2_median_us=180.89
+---
+F ibm_a4 qubits=27 clops=100000.0 pending_jobs=679 T1_median_us=205.58 readout_error_median=0.01587
+F ibm_b2 qubits=120 clops=100000.0 pending_jobs=435 T1_median_us=128.55 readout_error_median=0.02047
+F ibm_c5 qubits=200 clops=100000.0 pending_jobs=124 T1_median_us=198.84 readout_error_median=0.02686 T2_median_us=177.91
+F ibm_d0 qubits=200 clops=195000.0 readout_error_median=0.01885 T2_median_us=64.37 processor_type=Heron:1
+---
+F ibm_a4 clops=240000.0 pending_jobs=679 readout_error_median=0.00442 T2_median_us=149.12 processor_type=Eagle:2
+F ibm_b2 qubits=27 clops=400000.0 pending_jobs=42 T1_median_us=132.04 readout_error_median=0.0194
+F ibm_c8 qubits=120 clops=240000.0 pending_jobs=42 T1_median_us=121.59 readout_error_median=0.04023
+F ibm_d1 qubits=200 clops=240000.0 pending_jobs=679 readout_error_median=0.00203
+---
+F ibm_a0 qubits=27 clops=320000.0 pending_jobs=124 T1_median_us=112.71 T2_median_us=155.16 processor_type=Eagle:1
+F ibm_b6 qubits=156 T1_median_us=217.46 readout_error_median=0.02595 T2_median_us=165.06
+F ibm_c5 qubits=27 pending_jobs=679 T1_median_us=94.19 readout_error_median=0.03617 T2_median_us=117.36 processor_type=Eagle:3
+F ibm_d2 qubits=27 clops=400000.0 pending_jobs=1 T1_median_us=97.95 readout_error_median=0.03527 processor_type=Nighthawk:2
+---
+F ibm_a0 qubits=200 clops=400000.0 pending_jobs=435 readout_error_median=0.03926
+F ibm_b3 qubits=127 clops=320000.0 pending_jobs=0 T1_median_us=245.84 T2_median_us=53.81
+---
+F ibm_a9 qubits=156 pending_jobs=42 T1_median_us=249.97 readout_error_median=0.03603 T2_median_us=160.42 processor_type=Heron:1
+F ibm_b6 qubits=27 T1_median_us=182.48
+F ibm_c7 qubits=156 clops=100000.0 pending_jobs=3 T1_median_us=132.88
+F ibm_d2 qubits=127 clops=195000.0 pending_jobs=435 readout_error_median=0.02801 T2_median_us=153.79 processor_type=Nighthawk:1
+F ibm_e0 qubits=127 clops=100000.0 pending_jobs=679 T1_median_us=209.78 readout_error_median=0.02993 T2_median_us=94.15
+F ibm_f0 qubits=156 clops=195000.0
+---
+F ibm_a3 qubits=127 clops=240000.0 pending_jobs=42 T2_median_us=120.26 processor_type=Eagle:3
+F ibm_b1 qubits=200 clops=195000.0 pending_jobs=42 readout_error_median=0.00912 T2_median_us=171.45
+F ibm_c5 qubits=127 clops=400000.0 pending_jobs=42 T1_median_us=103.44 readout_error_median=0.00225 processor_type=Nighthawk:2
+F ibm_d3 qubits=27 clops=100000.0 pending_jobs=0 T1_median_us=214.23 readout_error_median=0.03413
+---
+F ibm_a0 qubits=200 pending_jobs=42 processor_type=Nighthawk:3
+F ibm_b4 qubits=200 clops=100000.0 pending_jobs=124 readout_error_median=0.01539 processor_type=Nighthawk:3
+F ibm_c4 qubits=120 clops=100000.0 T1_median_us=242.21 T2_median_us=119.38 processor_type=Nighthawk:3
+---
+F ibm_a2 clops=240000.0 pending_jobs=0 T1_median_us=172.79 readout_error_median=0.0458 T2_median_us=192.34 processor_type=Nighthawk:1
+---
+F ibm_a4 qubits=127 clops=100000.0 pending_jobs=435 readout_error_median=0.00934 processor_type=Eagle:1
+F ibm_b3 qubits=120 clops=320000.0 pending_jobs=42 readout_error_median=0.02846 processor_type=Eagle:1
+F ibm_c9 qubits=200 clops=320000.0 pending_jobs=1 T1_median_us=206.84 processor_type=Heron:3
+F ibm_d4 qubits=156 clops=240000.0 pending_jobs=0 T1_median_us=246.25 readout_error_median=0.00168
+F ibm_e8 qubits=200 T1_median_us=137.67 readout_error_median=0.02431 T2_median_us=66.61 processor_type=Nighthawk:3
+F ibm_f0 qubits=156 pending_jobs=42 T1_median_us=246.47 T2_median_us=139.1 processor_type=Nighthawk:1
+---
+F ibm_a6 qubits=127 clops=240000.0 T1_median_us=135.91 readout_error_median=0.01652 T2_median_us=68.15 processor_type=Eagle:2
+F ibm_b6 qubits=156 clops=320000.0 pending_jobs=679 T1_median_us=80.32 T2_median_us=125.86 processor_type=Heron:3
+---
+F ibm_a6 qubits=156 clops=320000.0 pending_jobs=0 T1_median_us=166.29
+F ibm_b3 qubits=27 clops=400000.0 pending_jobs=679 T1_median_us=226.89 readout_error_median=0.01617 T2_median_us=165.66
+F ibm_c1 qubits=156 clops=320000.0 pending_jobs=1 T1_median_us=205.09 T2_median_us=199.24 processor_type=Heron:2
+F ibm_d3 clops=195000.0 T1_median_us=125.49 readout_error_median=0.02791 processor_type=Eagle:2
+F ibm_e3 qubits=200 clops=400000.0 pending_jobs=1 T1_median_us=80.64 readout_error_median=0.00151 T2_median_us=198.07
+F ibm_f7 qubits=127 clops=195000.0 T1_median_us=189.83 T2_median_us=120.13
+---
+F ibm_a1 qubits=27 clops=400000.0 pending_jobs=3 T1_median_us=165.24 readout_error_median=0.02266 T2_median_us=181.23 processor_type=Heron:2
+F ibm_b0 qubits=200 clops=400000.0 pending_jobs=3 processor_type=Heron:3
+F ibm_c3 qubits=120 clops=240000.0 pending_jobs=42 T1_median_us=179.19 readout_error_median=0.02592 T2_median_us=72.78 processor_type=Eagle:1
+F ibm_d5 qubits=120 clops=400000.0 pending_jobs=124 readout_error_median=0.04568 T2_median_us=60.1 processor_type=Eagle:3
+F ibm_e5 clops=240000.0 pending_jobs=3
+---
+F ibm_a5 qubits=200 clops=100000.0 pending_jobs=0
+F ibm_b7 qubits=27 clops=195000.0 T1_median_us=249.13 T2_median_us=81.85
+F ibm_c4 qubits=120 clops=400000.0 T1_median_us=116.86 readout_error_median=0.00657 T2_median_us=112.43
+F ibm_d8 clops=320000.0 pending_jobs=42 T1_median_us=249.44 readout_error_median=0.01047 T2_median_us=93.12 processor_type=Heron:3
+F ibm_e7 clops=100000.0 T2_median_us=53.79 processor_type=Heron:2
+F ibm_f3 qubits=120 T1_median_us=112.9 readout_error_median=0.04832 processor_type=Eagle:2
+---
+R qubits=128
+R qubits>=127
+R qubits>200
+R qubits!=156
+R clops=200000
+R clops>=320000
+R pending_jobs=100
+R pending_jobs<50
+R readout_error_median=0.01
+R readout_error_median<=0.005
+R T1_median_us=100
+R T1_median_us>=150
+R T2_median_us=80
+R processor_type=Heron
+R processor_type=Nighthawk
+R processor_type!=Eagle
+R qubits=128;clops=200000
+R clops=200000;qubits=128
+R qubits=128;pending_jobs=100;clops=150000
+R pending_jobs=100;T1_median_us=120;qubits=120
+R qubits=127;processor_type=Heron;readout_error_median=0.02
+R processor_type=Heron;qubits=156;clops=240000;pending_jobs=500
+R qubits=1000
+R clops>=999999999
+R T1_median_us>=100;T2_median_us>=100;readout_error_median<=0.02

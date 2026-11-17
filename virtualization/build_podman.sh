@@ -46,15 +46,13 @@ repo_root="$(dirname -- "$script_dir")"
 lsf_tarfile="lsfsce$lsf_version-$lsf_arch.tar.Z"
 lsf_distro="${lsf_tarfile%.*.*}"
 
-for script in qrmi-esub-jobstarter.py elim.qpu; do
-    if [ -e "$script_dir/$script" ]; then
-        echo "Build staging file already exists: $script_dir/$script" >&2
-        exit 1
-    fi
-done
-trap 'rm -f "$script_dir/qrmi-esub-jobstarter.py" "$script_dir/elim.qpu"' EXIT
-cp "$repo_root/qrmi-esub-jobstarter.py" "$script_dir/"
-cp "$repo_root/elim.qpu" "$script_dir/"
+# The Dockerfile builds the Rust binaries in its first stage, so the build
+# context is the repository root (it needs Cargo.toml, Cargo.lock, .cargo/
+# and crates/). The LSF tarball must therefore sit at the root too, which is
+# where the download instructions in README.md already put it.
+#
+# No staging copies are needed any more: the previous build copied the two
+# Python scripts into virtualization/ because the context was this directory.
 
 "${CONTAINER_ENGINE:-podman}" build \
   --platform "linux/$podman_arch" \
@@ -63,4 +61,4 @@ cp "$repo_root/elim.qpu" "$script_dir/"
   --build-arg LSFINSTALLER=$lsf_installer \
   -t localhost/lsf-ce:latest \
   -f "$script_dir/Dockerfile" \
-  "$script_dir"
+  "$repo_root"

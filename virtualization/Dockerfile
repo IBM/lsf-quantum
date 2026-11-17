@@ -8,6 +8,74 @@
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
+# ---------------------------------------------------------------------------
+# Stage 1: build the three Rust binaries.
+#
+# Kept separate so the runtime image carries neither the Rust toolchain nor
+# QRMI's build dependencies (openssl-devel, a C compiler, Python headers for
+# pyo3). The previous Python integration needed python3.11, a venv and three
+# pip packages *at runtime*; this needs none of that in the final image.
+#
+# Note the build context is the REPOSITORY ROOT, not virtualization/ --
+# build_podman.sh and build_apptainer.sh pass it accordingly.
+# ---------------------------------------------------------------------------
+FROM docker.io/library/rockylinux:9 AS lsfq-builder
+
+# QRMI is a git dependency and links against OpenSSL; its transitive AWS SDK
+# requires a recent toolchain, so rustup is used rather than the distro's
+# older rust package.
+#
+# `--allowerasing` is required, not cosmetic. Without it this install fails
+# on Rocky 9 with:
+#
+#   nothing provides openssl-libs(aarch-64) = 1:3.5.8-2.el9_8
+#   needed by openssl-devel-1:3.5.8-2.el9_8
+#
+# A -devel package requires its runtime library at exactly the same
+# version, and the base image ships an older openssl-libs. dnf will not
+# *upgrade* an already-installed package to satisfy a new install request
+# unless permitted to replace it, so the pair is unsatisfiable by default
+# even though both versions are present in the repositories (openssl-libs
+# in baseos, openssl-devel in appstream). `--allowerasing` lets dnf
+# upgrade openssl-libs in the same transaction.
+#
+# Naming `openssl-libs` explicitly in the install list also works, but
+# `--allowerasing` is kept because it covers any future -devel package
+# with the same base-image skew rather than hardcoding one name.
+#
+# Verified by building this layer on linux/arm64 with podman, 2026-10-09.
+RUN dnf -y --enablerepo=crb --setopt=install_weak_deps=False \
+      --allowerasing install \
+      gcc gcc-c++ make cmake git openssl-devel zlib-devel \
+      python3.11 python3.11-devel \
+ && dnf clean all \
+ && rm -rf /var/cache/dnf
+
+ENV RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo
+ENV PATH="/opt/cargo/bin:${PATH}"
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+      | sh -s -- -y --profile minimal --default-toolchain stable
+
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY .cargo ./.cargo
+COPY crates ./crates
+
+# --locked so the image is reproducible: the pinned QRMI tag and the
+# MSRV-compatible dependency set in Cargo.lock are used as committed.
+RUN cargo build --release --locked \
+      -p esub-qrmi -p jobstarter-qrmi -p elim-qpu
+
+# LSF expects these exact filenames. A Rust crate name cannot contain a dot,
+# so the artifacts are renamed here rather than in the runtime stage.
+RUN mkdir -p /out \
+ && install -m 755 target/release/esub-qrmi       /out/esub.qrmi \
+ && install -m 755 target/release/jobstarter-qrmi /out/jobstarter.qrmi \
+ && install -m 755 target/release/elim-qpu        /out/elim.qpu
+
+# ---------------------------------------------------------------------------
+# Stage 2: the LSF image.
+# ---------------------------------------------------------------------------
 FROM docker.io/library/rockylinux:9
 
 ARG LSFTARFILE=""
@@ -51,7 +119,7 @@ RUN mkdir -p ${LSF_TOP}
 RUN useradd lsfadmin
 
 COPY ${LSFTARFILE} /tmp/
-COPY install.config /tmp/
+COPY virtualization/install.config /tmp/
 
 RUN cd /tmp/ && \
     tar zxf ${LSFTARFILE} 
@@ -67,28 +135,44 @@ WORKDIR /tmp/${LSFDISTRO}/lsf/lsf10.1_lsfinstall
 RUN sed -i "s@^[[:space:]]*LSF_TARDIR=.*@LSF_TARDIR=\"/tmp/${LSFDISTRO}/lsf/\"@" /tmp/install.config \
  && ./lsfinstall -f /tmp/install.config
 
-# LSF-QRMI integration (current repository scripts, including PR #16).
-RUN dnf -y --enablerepo=crb install python3.11 python3.11-pip python3.11-devel gcc-gfortran openblas-devel lapack-devel \
+# A Python runtime for the *workloads*, not for the integration.
+#
+# The scheduler integration (esub, jobstarter, ELIM) is now Rust and needs
+# no interpreter. But the quantum jobs a user submits through it -- the
+# Qiskit circuits in examples/, and anything they write themselves -- are
+# Python, because Qiskit is. The venv below exists only for those; the LSF
+# binaries do not use it.
+#
+# Drop this layer if the image is only ever used to schedule externally
+# supplied containers.
+RUN dnf -y --enablerepo=crb install python3.11 python3.11-pip \
  && dnf clean all \
  && python3.11 -m venv /opt/qrmi-venv \
- && /opt/qrmi-venv/bin/pip install --no-cache-dir \
-      "qrmi[ibm]>=0.25.1" python-dotenv omegaconf
+ && /opt/qrmi-venv/bin/pip install --no-cache-dir "qrmi[ibm]>=0.26.0" python-dotenv \
+ && /opt/qrmi-venv/bin/python -c "import qrmi, dotenv"
 
 ENV PATH="/opt/qrmi-venv/bin:${PATH}"
 
-COPY qrmi-esub-jobstarter.py elim.qpu /tmp/lsf-quantum/
+# LSF-QRMI integration: the Rust binaries from stage 1.
+#
+# No interpreter, no venv and no pip packages. The symlink pair the Python
+# needed (esub.qrmi and jobstarter.qrmi both pointing at one script that
+# branched on argv[0]) is gone: these are three independent binaries.
+COPY --from=lsfq-builder /out/ /tmp/lsf-quantum/
 
 RUN bash -c 'set -eux; \
     LSF_SERVERDIR="$(find /opt/lsf/10.1 -mindepth 2 -maxdepth 2 -type d -name etc -print -quit)"; \
     test -n "$LSF_SERVERDIR"; \
-    install -m 755 /tmp/lsf-quantum/qrmi-esub-jobstarter.py "$LSF_SERVERDIR/qrmi-esub-jobstarter.py"; \
-    install -m 755 /tmp/lsf-quantum/elim.qpu "$LSF_SERVERDIR/elim.qpu"; \
-    sed -i "1c#!/opt/qrmi-venv/bin/python" "$LSF_SERVERDIR/qrmi-esub-jobstarter.py"; \
-    sed -i "1c#!/opt/qrmi-venv/bin/python" "$LSF_SERVERDIR/elim.qpu"; \
-    ln -s qrmi-esub-jobstarter.py "$LSF_SERVERDIR/esub.qrmi"; \
-    ln -s qrmi-esub-jobstarter.py "$LSF_SERVERDIR/jobstarter.qrmi"' \
- && rm -rf /tmp/lsf-quantum \
- && /opt/qrmi-venv/bin/python -c "import qrmi, dotenv, omegaconf"
+    install -m 755 /tmp/lsf-quantum/esub.qrmi       "$LSF_SERVERDIR/esub.qrmi"; \
+    install -m 755 /tmp/lsf-quantum/jobstarter.qrmi "$LSF_SERVERDIR/jobstarter.qrmi"; \
+    install -m 755 /tmp/lsf-quantum/elim.qpu        "$LSF_SERVERDIR/elim.qpu"' \
+ && rm -rf /tmp/lsf-quantum
+
+# Fail the build rather than ship an image whose binaries cannot start --
+# a missing shared library would otherwise only surface when LSF ran them.
+RUN bash -c 'set -eux; \
+    LSF_SERVERDIR="$(find /opt/lsf/10.1 -mindepth 2 -maxdepth 2 -type d -name etc -print -quit)"; \
+    "$LSF_SERVERDIR/esub.qrmi" --help > /dev/null'
 
 # Configure the quantum queue in the image.
 RUN bash -c 'set -eu; \
@@ -106,7 +190,7 @@ RUN rm -rf /tmp/install.config \
            /tmp/${LSFDISTRO} \
            /tmp/${LSFTARFILE}
 
-COPY lsf-entrypoint.sh /usr/local/bin/lsf-entrypoint.sh
+COPY virtualization/lsf-entrypoint.sh /usr/local/bin/lsf-entrypoint.sh
 
 RUN chmod 755 /usr/local/bin/lsf-entrypoint.sh
 

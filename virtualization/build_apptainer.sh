@@ -29,6 +29,23 @@ test ! -e "$output" || {
 }
 test -d "$(dirname -- "$output")"
 
+# Apptainer has no multi-stage build, so the three binaries are compiled on
+# the host and copied in by %files. That keeps the Rust toolchain and QRMI's
+# build dependencies out of the image, and makes a compile failure a build
+# failure here rather than inside the container.
+#
+# Requires a recent stable toolchain: QRMI is a git dependency whose
+# transitive AWS SDK has an MSRV above this project's declared 1.76. See
+# crates/lsfq-core/README.md.
+echo "==> building the Rust binaries"
+cargo build --release --locked --manifest-path "$repo_root/Cargo.toml" \
+    -p esub-qrmi -p jobstarter-qrmi -p elim-qpu
+
+for binary in esub-qrmi jobstarter-qrmi elim-qpu; do
+    test -x "$repo_root/target/release/$binary" \
+        || { echo "missing build artifact: target/release/$binary" >&2; exit 1; }
+done
+
 build_stage=$(mktemp -d /var/tmp/lsf-apptainer-build.XXXXXX)
 trap 'rm -rf -- "$build_stage"' EXIT
 mkdir -p "$build_stage/cache" "$build_stage/tmp"

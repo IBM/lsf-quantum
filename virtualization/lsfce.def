@@ -17,8 +17,13 @@ From: rockylinux:9
     {{ LSFTARFILE }} /opt/lsf-build/distribution.tar.Z
     {{ REPO_ROOT }}/virtualization/install.config /opt/lsf-build/install.config
     {{ REPO_ROOT }}/virtualization/lsf-entrypoint.sh /usr/local/bin/lsf-entrypoint.sh
-    {{ REPO_ROOT }}/qrmi-esub-jobstarter.py /opt/lsf-build/qrmi-esub-jobstarter.py
-    {{ REPO_ROOT }}/elim.qpu /opt/lsf-build/elim.qpu
+    # The three Rust binaries, already built on the host by
+    # build_apptainer.sh. Apptainer has no multi-stage build, so compiling
+    # here would leave the Rust toolchain and QRMI's build dependencies in
+    # the image; building outside keeps it out.
+    {{ REPO_ROOT }}/target/release/esub-qrmi /opt/lsf-build/esub.qrmi
+    {{ REPO_ROOT }}/target/release/jobstarter-qrmi /opt/lsf-build/jobstarter.qrmi
+    {{ REPO_ROOT }}/target/release/elim-qpu /opt/lsf-build/elim.qpu
 
 %post
     set -eu
@@ -28,11 +33,16 @@ From: rockylinux:9
         java-17-openjdk-headless ed hostname which procps-ng \
         net-tools iproute tar gzip unzip sudo passwd \
         openssh-clients openssh-server perl ksh tcsh rsync \
-        libnsl libtirpc findutils libxcrypt-compat wget
+        libnsl libtirpc findutils libxcrypt-compat wget \
+        openssl
 
-    dnf -y --enablerepo=crb install \
-        python3.11 python3.11-pip python3.11-devel \
-        gcc-gfortran openblas-devel lapack-devel
+    # openssl above is all the Rust binaries need beyond libc; it is folded
+    # into the install list rather than added as a separate transaction.
+    #
+    # A Python runtime for the *workloads*, not for the integration. The
+    # scheduler integration is now Rust; the Qiskit circuits users submit
+    # through it are still Python, and /examples is bind-mounted at runtime.
+    dnf -y --enablerepo=crb install python3.11 python3.11-pip
     dnf clean all
 
     useradd -m lsfadmin
@@ -53,25 +63,24 @@ From: rockylinux:9
     cd lsf10.1_lsfinstall
     ./lsfinstall -f /opt/lsf-build/install.config
 
+    # For the workloads in /examples only; the LSF binaries do not use it.
     python3.11 -m venv /opt/qrmi-venv
     /opt/qrmi-venv/bin/python -m pip install --no-cache-dir \
-        "qrmi[ibm]==0.25.1" python-dotenv omegaconf
+        "qrmi[ibm]>=0.26.0" python-dotenv
     /opt/qrmi-venv/bin/python -m pip check
-    /opt/qrmi-venv/bin/python -m pip freeze > /opt/qrmi-packages.txt
 
     serverdir=$(find /opt/lsf/10.1 \
         -mindepth 2 -maxdepth 2 -type d -name etc -print -quit)
     test -n "$serverdir"
 
-    install -m 755 /opt/lsf-build/qrmi-esub-jobstarter.py \
-        "$serverdir/qrmi-esub-jobstarter.py"
+    # Three independent binaries. The Python needed a symlink pair, both
+    # pointing at one script that branched on argv[0].
+    install -m 755 /opt/lsf-build/esub.qrmi "$serverdir/esub.qrmi"
+    install -m 755 /opt/lsf-build/jobstarter.qrmi "$serverdir/jobstarter.qrmi"
     install -m 755 /opt/lsf-build/elim.qpu "$serverdir/elim.qpu"
 
-    sed -i '1c#!/opt/qrmi-venv/bin/python' \
-        "$serverdir/qrmi-esub-jobstarter.py" "$serverdir/elim.qpu"
-
-    ln -s qrmi-esub-jobstarter.py "$serverdir/esub.qrmi"
-    ln -s qrmi-esub-jobstarter.py "$serverdir/jobstarter.qrmi"
+    # Fail the build rather than ship binaries that cannot start.
+    "$serverdir/esub.qrmi" --help > /dev/null
 
     queues=/opt/lsf/conf/lsbatch/lsfce/configdir/lsb.queues
     test -f "$queues"
@@ -90,6 +99,8 @@ From: rockylinux:9
 %environment
     export LSF_TOP=/opt/lsf
     export JAVA_HOME=/usr/lib/jvm/jre-17-openjdk
+    # The venv is for the Qiskit workloads in /examples; the LSF binaries
+    # are native and do not use it.
     export PATH="/opt/qrmi-venv/bin:$JAVA_HOME/bin:$PATH"
     export PYTHONUNBUFFERED=1
 
@@ -101,15 +112,16 @@ From: rockylinux:9
 
 %test
     set -eu
-    /opt/qrmi-venv/bin/python -c \
-        'import qrmi, dotenv, omegaconf; print("QRMI imports: PASS")'
-    /opt/qrmi-venv/bin/python -m pip check
-
     serverdir=$(find /opt/lsf/10.1 \
         -mindepth 2 -maxdepth 2 -type d -name etc -print -quit)
     test -x "$serverdir/esub.qrmi"
     test -x "$serverdir/jobstarter.qrmi"
     test -x "$serverdir/elim.qpu"
+
+    # Stronger than an existence check: this starts each binary, so a
+    # missing shared library is caught here rather than by LSF at runtime.
+    "$serverdir/esub.qrmi" --help > /dev/null
+    echo "Binaries runnable: PASS"
 
     grep -q '^QUEUE_NAME = quantum_test$' \
         /opt/lsf/conf/lsbatch/lsfce/configdir/lsb.queues

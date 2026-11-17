@@ -1,0 +1,35 @@
+# (C) Copyright 2025-2026 IBM. All Rights Reserved.
+#
+# This code is licensed under the Apache License, Version 2.0. You may
+# obtain a copy of this license in the LICENSE.txt file in the root directory
+# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+
+[package]
+name = "elim-qpu"
+description = "LSF External Load Information Manager for IBM Quantum systems"
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# LSF installs this as $LSF_SERVERDIR/elim.qpu. A Rust crate name cannot
+# contain a dot, so the artifact is built as `elim-qpu` and renamed on
+# install; see this crate's README.
+[[bin]]
+name = "elim-qpu"
+path = "src/main.rs"
+
+[dependencies]
+# The QRMI adapter is required here: an ELIM that cannot query a QPU has
+# nothing to report.
+lsfq-core = { path = "../lsfq-core", features = ["qrmi"] }
+tokio = { version = "1.44.2", features = ["rt-multi-thread", "macros", "time", "signal"] }
+
+[dev-dependencies]
+# The reporting loop is async, so its tests need a runtime.
+tokio = { version = "1.44.2", features = ["rt", "macros"] }
+
+[lints]
+workspace = true

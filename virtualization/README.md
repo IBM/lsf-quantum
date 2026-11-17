@@ -10,7 +10,16 @@ Start with hostname lsfmaster. The image includes quantum_test. Supply credentia
 
 ## LSF-QRMI integration verification
 
-The image installs `qrmi[ibm]>=0.25.1`, `python-dotenv`, and `omegaconf`. Integration scripts are installed in the LSF server directory and use `/opt/qrmi-venv/bin/python`.
+The LSF integration (`esub.qrmi`, `jobstarter.qrmi`, `elim.qpu`) is built
+from this repository's Rust sources in the Dockerfile's first stage and
+installed into the LSF server directory as three native binaries. The
+runtime image contains no interpreter for them.
+
+The image also carries a Python venv at `/opt/qrmi-venv` with
+`qrmi[ibm]>=0.26.0` and `python-dotenv`, used **only by the quantum
+workloads** a user submits (the Qiskit circuits in `examples/`), not by the
+scheduler integration. Because the build context is the repository root,
+`podman build` is invoked from `build_podman.sh` rather than directly.
 
 All three images passed build, daemon startup, host status, ESUB help, dependency imports, and normal LSF job execution. AMD64 ran natively on RHEL x86_64; ARM64 and PPC64LE ran under QEMU.
 

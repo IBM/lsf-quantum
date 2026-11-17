@@ -1,0 +1,33 @@
+# (C) Copyright 2025-2026 IBM. All Rights Reserved.
+#
+# This code is licensed under the Apache License, Version 2.0. You may
+# obtain a copy of this license in the LICENSE.txt file in the root directory
+# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+
+[package]
+name = "jobstarter-qrmi"
+description = "LSF jobstarter that acquires a QPU and launches the job"
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# LSF installs this as $LSF_SERVERDIR/jobstarter.qrmi. A Rust crate name
+# cannot contain a dot, so the artifact is built as `jobstarter-qrmi` and
+# renamed on install; see this crate's README.
+[[bin]]
+name = "jobstarter-qrmi"
+path = "src/main.rs"
+
+[dependencies]
+lsfq-core = { path = "../lsfq-core", features = ["qrmi"] }
+tokio = { version = "1.44.2", features = ["rt-multi-thread", "macros"] }
+
+[dev-dependencies]
+tokio = { version = "1.44.2", features = ["rt", "macros"] }
+tempfile = "3.19.1"
+
+[lints]
+workspace = true

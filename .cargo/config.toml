@@ -1,0 +1,13 @@
+# (C) Copyright 2025-2026 IBM. All Rights Reserved.
+#
+# This code is licensed under the Apache License, Version 2.0.
+
+# Pick dependency versions compatible with the declared rust-version.
+#
+# QRMI pulls in the AWS SDK transitively, and some aws-smithy-* releases
+# require a newer rustc than a given toolchain provides. Without this,
+# `--features qrmi` fails to resolve outright instead of selecting the last
+# compatible release. "fallback" only downgrades when the newest version is
+# incompatible, so an up-to-date toolchain still gets current dependencies.
+[resolver]
+incompatible-rust-versions = "fallback"
