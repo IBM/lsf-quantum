@@ -1,0 +1,45 @@
+# (C) Copyright 2025-2026 IBM. All Rights Reserved.
+#
+# This code is licensed under the Apache License, Version 2.0. You may
+# obtain a copy of this license in the LICENSE.txt file in the root directory
+# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+
+[package]
+name = "lsfq-core"
+description = "Shared routines for the LSF quantum esub, jobstarter and ELIM"
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+# The QRMI adapter is optional so that the parsers, formatters and
+# environment logic -- the bulk of this crate -- build and test without the
+# QRMI crate, its tokio runtime, or a network. The jobstarter and esub binaries enable it;
+# unit tests do not need to.
+default = []
+qrmi = ["dep:qrmi", "dep:tokio", "dep:futures"]
+
+[dependencies]
+qpu-select = { path = "../qpu-select" }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+
+# Enabled only by the `qrmi` feature; see above.
+#
+# QRMI is not published to crates.io, so it is taken from git and pinned to
+# a tag rather than a version range. Its Rust API is pre-1.0 and still
+# moving (`is_accessible()` is already deprecated in favour of `status()`),
+# so the pin is deliberate: upgrades should be an explicit, reviewed change
+# confined to this crate's qrmi module.
+qrmi = { git = "https://github.com/qiskit-community/qrmi", tag = "0.26.3", optional = true }
+tokio = { version = "1.44.2", features = ["rt-multi-thread", "macros"], optional = true }
+futures = { version = "0.3.31", optional = true }
+
+[dev-dependencies]
+tempfile = "3.19.1"
+
+[lints]
+workspace = true

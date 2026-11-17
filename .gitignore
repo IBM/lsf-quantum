@@ -1,0 +1,31 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+
+# LaTeX intermediates (the .pdf is committed deliberately)
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+
+# Python bytecode from examples/
+__pycache__/
+*.py[cod]
+
+# Credentials: never commit an API key or CRN
+.env
+env.qpu
+
+# LSF Community Edition distribution tarballs. Downloaded separately for a
+# container build (see virtualization/README.md) and ~1 GB each, so they
+# must never be committed.
+lsfsce*.tar.Z
+lsf*.tar.Z
+*.tar.Z
+
+# Release staging built by .github/workflows/release.yml
+/dist/
+
+# macOS
+.DS_Store

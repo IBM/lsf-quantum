@@ -1,0 +1,19 @@
+# The build context is the repository root (the Dockerfile's first stage
+# compiles the Rust binaries), so everything excluded here is relative to
+# the root rather than to virtualization/.
+
+.git
+
+# Build artifacts: the image builds its own, and target/ is multi-gigabyte.
+target/
+
+# Credentials must never enter an image layer.
+**/.env
+**/.env.*
+**/env.qpu
+
+# Not needed by the build.
+**/__pycache__
+docs/
+examples/
+*.png

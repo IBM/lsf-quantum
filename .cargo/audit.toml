@@ -1,0 +1,92 @@
+# (C) Copyright 2025-2026 IBM. All Rights Reserved.
+#
+# This code is licensed under the Apache License, Version 2.0.
+#
+# cargo-audit configuration.
+#
+# See SECURITY-NOTES.md for the full analysis behind the ignores below. The
+# short version: these advisories reach this workspace only transitively,
+# cannot be upgraded from here, and are not reachable at runtime by any of
+# the three binaries. The QRMI maintainer confirmed that the rustls-webpki
+# ones can be ignored.
+
+[advisories]
+ignore = [
+    # --- rustls-webpki 0.101.7, via rustls 0.21 <- hyper-rustls 0.24 <-
+    # --- aws-smithy-http-client <- aws-sdk-s3 <- QRMI.
+    #
+    # Not fixable here. rustls 0.21 requires rustls-webpki ^0.101, so the
+    # version cannot be bumped in isolation; every hyper-rustls 0.24.x
+    # release is pinned to rustls 0.21; and a [patch] to the same source is
+    # rejected by cargo. Verified that even the newest
+    # aws-sdk-s3 (1.152.0) still resolves this same legacy stack, so this
+    # is not a matter of a stale version pin anywhere in our control.
+    #
+    # The root cause is feature unification in aws-smithy-http-client: its
+    # modern `rustls-aws-lc` feature transitively activates the optional
+    # `legacy-hyper-rustls` dependency's `acceptor` feature, pulling in the
+    # whole rustls 0.21 stack even though nothing requests it.
+    #
+    # The modern rustls-webpki 0.103.15 is also present and is what the
+    # binaries actually use for their TLS to IBM Quantum Platform.
+
+    # NOT listed: RUSTSEC-2026-0049 (CRL distribution points). Its
+    # advisory carries `unaffected = ["< 0.102.0-alpha.0"]`, so 0.101.7 is
+    # explicitly out of scope and no tool raises it.
+
+    # URI name constraints incorrectly accepted.
+    # Requires misissuance, and the library exposes no URI-name API.
+    "RUSTSEC-2026-0098",
+
+    # Name constraints accepted for wildcard-asserting certificates.
+    # Requires misissuance by a trusted CA.
+    "RUSTSEC-2026-0099",
+
+    # Reachable panic in CRL parsing.
+    # "Applications that do not use CRLs are not affected" -- these
+    # binaries never parse a CRL.
+    "RUSTSEC-2026-0104",
+
+    # --- h2 0.3.27, same legacy aws-smithy-http-client path. ---
+    # "Unbounded empty DATA frames", rated low severity. Fixed only in
+    # h2 0.4.16+; 0.3.27 is the newest 0.3.x, so the line cannot be
+    # patched. The modern h2 0.4.20 is also in the tree.
+    "RUSTSEC-2026-0258",
+
+    # --- Unmaintained crates (no known vulnerability). ---
+    # dotenv 0.15.0: a direct dependency of QRMI, not of this workspace --
+    # lsfq-core parses .env and env.qpu itself (see creds.rs).
+    "RUSTSEC-2021-0141",
+    # instant 0.1.13: transitive via parking_lot 0.11 / wasm-timer.
+    "RUSTSEC-2024-0384",
+
+    # --- Kept in step with deny.toml. ---
+    # See SECURITY-NOTES.md. The modern-stack instances of RUSTSEC-2026-0346,
+    # -0349, -0381 and -0382 were fixed by updating Cargo.lock, not ignored.
+
+    # Timing variability, reachable only via the S3 request-signing path
+    # (aws-sigv4 / aws-smithy-checksums). Nothing in crates/ calls the AWS
+    # SDK, so no request is ever signed.
+    "RUSTSEC-2026-0385", # ctutils 0.4.3
+    "RUSTSEC-2026-0387", # crypto-bigint 0.5.5
+
+    # tokio AsyncFd I/O-safety. Nothing in crates/ constructs an AsyncFd.
+    "RUSTSEC-2026-0386",
+
+
+    # --- Modern TLS stack fixed in Cargo.lock; legacy remainder and unmaintained crates ---
+    # The *modern* TLS stack was fixed by updating Cargo.lock to rustls
+    # 0.23.46, rustls-webpki 0.103.17, webpki-roots 1.0.12 and rustix 1.1.6,
+    # which clears RUSTSEC-2026-0381 and -0486 and the 0.23.x instances of
+    # -0346, -0349 and -0382. What remains is the legacy rustls 0.21.12 /
+    # rustls-webpki 0.101.7 stack (see the top of this list): rustls 0.21 has
+    # no patched release, and nothing in this workspace uses it for traffic.
+    "RUSTSEC-2026-0346", # rustls 0.21.12 only
+    "RUSTSEC-2026-0349", # rustls 0.21.12 only
+    "RUSTSEC-2026-0382", # rustls-webpki 0.101.7 only
+
+    # Unmaintained / unsound, no fix available through QRMI.
+    "RUSTSEC-2026-0543", # chrono 0.4.45 (unmaintained), via QRMI sub-crates
+    "RUSTSEC-2026-0441", # pin-utils (unmaintained), via aws-smithy-http
+    "RUSTSEC-2026-0253", # lru 0.16.4 (LruCache::pop), via aws-sdk-s3 only
+]

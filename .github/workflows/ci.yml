@@ -1,0 +1,97 @@
+# (C) Copyright 2025-2026 IBM. All Rights Reserved.
+#
+# This code is licensed under the Apache License, Version 2.0.
+#
+# Build and test on every source change.
+#
+# Runs on GitHub-hosted runners.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# A new push to the same branch cancels the previous run: these builds take
+# minutes and an outdated result is not worth a runner slot.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # Fail on a warning in this workspace's own code. Not applied to clippy,
+  # which currently reports pre-existing pedantic lints -- see the lint job.
+  RUSTFLAGS: -D warnings
+
+jobs:
+  test:
+    name: Build and test
+    # Placeholder label. Replace with your runner's label, e.g.
+    # [self-hosted, linux, ARM64] or an enterprise group's label.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # rust-toolchain.toml pins 1.94.1, so no toolchain action is needed
+      # when the runner has rustup: the first cargo command installs it.
+      # Without rustup, the runner image must provide 1.94.1 or newer.
+      - name: Show toolchain
+        run: |
+          rustup show active-toolchain || true
+          cargo --version
+          rustc --version
+
+      # --locked everywhere: CI must build the committed dependency graph,
+      # never silently re-resolve it.
+      - name: Build
+        run: cargo build --workspace --locked --all-targets
+
+      - name: Test
+        run: cargo test --workspace --locked
+
+      # The three binaries as the README installs them. Catches a release
+      # profile that compiles only in debug.
+      - name: Release build
+        run: cargo build --release --locked -p esub-qrmi -p jobstarter-qrmi -p elim-qpu
+
+  lint:
+    name: Lint and dependency policy
+    runs-on: ubuntu-latest
+    # Advisory: these checks report known, documented conditions. They run
+    # for visibility and must not block a merge until the backlog they
+    # describe is cleared -- see the notes on each step.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      # clippy::pedantic is enabled workspace-wide. Rust 1.94 added lints
+      # that flag pre-existing code (manual_midpoint, unnecessary_map_or),
+      # so this is not gated with -D warnings yet.
+      - name: Clippy
+        run: cargo clippy --workspace --locked --all-targets
+
+      # This workspace has never been rustfmt-formatted and has no
+      # rustfmt.toml; a --check run rewrites all 31 files. Reported, not
+      # enforced, until that is decided.
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked --version ^0.20
+
+      # bans/licenses/sources pass today, so these are the real gate.
+      - name: Dependency bans, licences and sources
+        run: cargo deny check bans licenses sources
+
+      # Separated because it fails by design: four advisories affect the
+      # rustls stack carrying live traffic and are deliberately not
+      # suppressed. See SECURITY-NOTES.md.
+      - name: Security advisories (known failing)
+        run: cargo deny check advisories

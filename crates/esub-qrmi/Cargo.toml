@@ -1,0 +1,35 @@
+# (C) Copyright 2025-2026 IBM. All Rights Reserved.
+#
+# This code is licensed under the Apache License, Version 2.0. You may
+# obtain a copy of this license in the LICENSE.txt file in the root directory
+# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+
+[package]
+name = "esub-qrmi"
+description = "LSF submission filter that forwards a QPU request to the jobstarter"
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# LSF installs this as $LSF_SERVERDIR/esub.qrmi. A Rust crate name cannot
+# contain a dot, so the artifact is built as `esub-qrmi` and renamed on
+# install; see this crate's README.
+[[bin]]
+name = "esub-qrmi"
+path = "src/main.rs"
+
+[dependencies]
+# No `qrmi` feature: the esub never talks to a QPU. It parses a request,
+# reads a credentials file, and writes one line for LSF. That keeps this
+# binary free of the QRMI crate, the AWS SDK and a tokio runtime -- so it
+# also builds on the workspace's declared MSRV.
+lsfq-core = { path = "../lsfq-core" }
+
+[dev-dependencies]
+tempfile = "3.19.1"
+
+[lints]
+workspace = true
