@@ -14,7 +14,7 @@ dependencies = [
 [[package]]
 name = "alice-bob-felis"
 version = "0.1.0"
-source = "git+https://github.com/drvadim/qrmi?rev=56024d0a2305599867a612aa534d04792e718dfd#56024d0a2305599867a612aa534d04792e718dfd"
+source = "git+https://github.com/qiskit-community/qrmi?tag=0.27.1#b0e3dab96a8035837b4c9428c7288b3e8135bde9"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -1057,7 +1057,7 @@ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 [[package]]
 name = "felis-generated"
 version = "0.1.0"
-source = "git+https://github.com/drvadim/qrmi?rev=56024d0a2305599867a612aa534d04792e718dfd#56024d0a2305599867a612aa534d04792e718dfd"
+source = "git+https://github.com/qiskit-community/qrmi?tag=0.27.1#b0e3dab96a8035837b4c9428c7288b3e8135bde9"
 dependencies = [
  "reqwest",
  "serde",
@@ -1647,7 +1647,7 @@ checksum = "791930b43c0d5973160d90a8f3894509f2b273430f5c5c73b668636d0287c5c0"
 [[package]]
 name = "iqm-server-api"
 version = "1.0.0"
-source = "git+https://github.com/drvadim/qrmi?rev=56024d0a2305599867a612aa534d04792e718dfd#56024d0a2305599867a612aa534d04792e718dfd"
+source = "git+https://github.com/qiskit-community/qrmi?tag=0.27.1#b0e3dab96a8035837b4c9428c7288b3e8135bde9"
 dependencies = [
  "bytes",
  "chrono",
@@ -1826,6 +1826,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "maestro-local-api"
+version = "0.1.0"
+source = "git+https://github.com/qiskit-community/qrmi?tag=0.27.1#b0e3dab96a8035837b4c9428c7288b3e8135bde9"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "md-5"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1970,7 +1978,7 @@ dependencies = [
 [[package]]
 name = "pasqal-cloud-api"
 version = "0.1.0"
-source = "git+https://github.com/drvadim/qrmi?rev=56024d0a2305599867a612aa534d04792e718dfd#56024d0a2305599867a612aa534d04792e718dfd"
+source = "git+https://github.com/qiskit-community/qrmi?tag=0.27.1#b0e3dab96a8035837b4c9428c7288b3e8135bde9"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1993,7 +2001,7 @@ dependencies = [
 [[package]]
 name = "pasqal-local-api"
 version = "0.0.1"
-source = "git+https://github.com/drvadim/qrmi?rev=56024d0a2305599867a612aa534d04792e718dfd#56024d0a2305599867a612aa534d04792e718dfd"
+source = "git+https://github.com/qiskit-community/qrmi?tag=0.27.1#b0e3dab96a8035837b4c9428c7288b3e8135bde9"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2115,55 +2123,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "pyo3"
-version = "0.29.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "700d18fa267b73b9b521fd7e13580e2f446916f176cacee1ab63fcc8191f1655"
-dependencies = [
- "libc",
- "once_cell",
- "portable-atomic",
- "pyo3-build-config",
- "pyo3-ffi",
-]
-
-[[package]]
-name = "pyo3-build-config"
-version = "0.29.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b3fc0c4d08f6bb10e71fe39dfb9e2f59c6eb6854e22ec8092f50c69a4499adb"
-dependencies = [
- "target-lexicon",
-]
-
-[[package]]
-name = "pyo3-ffi"
-version = "0.29.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfc0b8e19df29aad7086cf977bb0c2a2f143e30567eb113e9cf72b62ca698330"
-dependencies = [
- "libc",
- "pyo3-build-config",
-]
-
-[[package]]
-name = "pythonize"
-version = "0.29.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ec376e1216e0c929a74964ce2020012a1a39f32d80e78aa688721219ea7fb89"
-dependencies = [
- "pyo3",
- "serde",
-]
-
-[[package]]
 name = "qpu-select"
 version = "0.1.0"
 
 [[package]]
 name = "qrmi"
-version = "0.26.3"
-source = "git+https://github.com/drvadim/qrmi?rev=56024d0a2305599867a612aa534d04792e718dfd#56024d0a2305599867a612aa534d04792e718dfd"
+version = "0.27.1"
+source = "git+https://github.com/qiskit-community/qrmi?tag=0.27.1#b0e3dab96a8035837b4c9428c7288b3e8135bde9"
 dependencies = [
  "alice-bob-felis",
  "anyhow",
@@ -2180,9 +2146,9 @@ dependencies = [
  "libc",
  "libloading",
  "log",
+ "maestro-local-api",
  "pasqal-cloud-api",
  "pasqal-local-api",
- "pythonize",
  "quantum-system-api",
  "quantum_compute_client",
  "reqwest-retry",
@@ -2196,7 +2162,7 @@ dependencies = [
 [[package]]
 name = "quantum-system-api"
 version = "0.15.0"
-source = "git+https://github.com/drvadim/qrmi?rev=56024d0a2305599867a612aa534d04792e718dfd#56024d0a2305599867a612aa534d04792e718dfd"
+source = "git+https://github.com/qiskit-community/qrmi?tag=0.27.1#b0e3dab96a8035837b4c9428c7288b3e8135bde9"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2221,7 +2187,7 @@ dependencies = [
 [[package]]
 name = "quantum_compute_client"
 version = "0.31.10"
-source = "git+https://github.com/drvadim/qrmi?rev=56024d0a2305599867a612aa534d04792e718dfd#56024d0a2305599867a612aa534d04792e718dfd"
+source = "git+https://github.com/qiskit-community/qrmi?tag=0.27.1#b0e3dab96a8035837b4c9428c7288b3e8135bde9"
 dependencies = [
  "reqwest",
  "serde",
@@ -2749,6 +2715,8 @@ version = "1.0.154"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7e9cc8b1b85264074fbcc02a88680c4096b1e47df8f739dceb03bf482f04bd6"
 dependencies = [
+ "foldhash",
+ "indexmap 2.14.2",
  "itoa",
  "memchr",
  "serde",
@@ -2977,12 +2945,6 @@ dependencies = [
  "quote",
  "syn 3.0.10",
 ]
-
-[[package]]
-name = "target-lexicon"
-version = "0.13.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c447be3a2abfa84b2d91680c56600bd6b2873866de27b36ec911be705e291da"
 
 [[package]]
 name = "tempfile"

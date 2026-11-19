@@ -34,10 +34,7 @@ serde_json = "1.0.140"
 # moving (`is_accessible()` is already deprecated in favour of `status()`),
 # so the pin is deliberate: upgrades should be an explicit, reviewed change
 # confined to this crate's qrmi module.
-# TEMPORARY (IBM/lsf-quantum#32): fork of tag 0.26.3 with aws-sdk-s3 default
-# features disabled, which drops the legacy rustls 0.21 / rustls-webpki 0.101
-# copies. Switch back to the upstream tag once QRMI releases the fix.
-qrmi = { git = "https://github.com/drvadim/qrmi", rev = "56024d0a2305599867a612aa534d04792e718dfd", optional = true }
+qrmi = { git = "https://github.com/qiskit-community/qrmi", tag = "0.27.1", optional = true }
 tokio = { version = "1.44.2", features = ["rt-multi-thread", "macros"], optional = true }
 futures = { version = "0.3.31", optional = true }
 
