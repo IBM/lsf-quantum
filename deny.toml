@@ -15,42 +15,6 @@ version = 2
 yanked = "warn"
 
 ignore = [
-    # rustls-webpki 0.101.7, reached transitively via
-    #   rustls 0.21 <- hyper-rustls 0.24 <- aws-smithy-http-client
-    #   <- aws-sdk-s3 <- QRMI 0.26.0
-    #
-    # Cannot be remediated from this workspace; the fix belongs upstream in
-    # aws-smithy-http-client. Not reachable at runtime: these binaries talk
-    # only to IBM Quantum Platform over TLS (which uses the modern
-    # rustls-webpki 0.103.15, also in the tree), never touch the S3 code
-    # path, and never parse a CRL. Three of the four advisories additionally
-    # require a compromised CA or a misissued certificate.
-    #
-    # Raised with the QRMI maintainer, who confirmed this can be ignored:
-    # the legacy stack is not the path QRMI uses. We
-    # verified that independently -- see SECURITY-NOTES.md, which also
-    # records that the code is still compiled, and still linked into
-    # jobstarter.qrmi, so the suppression is a risk judgement rather than
-    # an absence.
-    #
-    # Re-check when QRMI next bumps aws-sdk-s3 / aws-smithy-http-client:
-    # if the legacy stack is gone, delete these lines.
-    #
-    # NOT listed: RUSTSEC-2026-0049. Its advisory carries
-    # `unaffected = ["< 0.102.0-alpha.0"]`, so 0.101.7 is explicitly out of
-    # scope and cargo-deny never raises it.
-    "RUSTSEC-2026-0098", # URI name constraints ignored
-    "RUSTSEC-2026-0099", # wildcard name constraints
-    "RUSTSEC-2026-0104", # reachable panic in CRL parsing
-
-    # h2 0.3.27 -- "unbounded empty DATA frames", rated low severity by the
-    # advisory. Reached through the *same* legacy path as rustls-webpki
-    # above: aws-smithy-http-client's hyper-0.14 client. Fixed only in
-    # h2 0.4.16+, and 0.3.27 is the newest 0.3.x release, so the 0.3 line
-    # cannot be patched. The modern h2 0.4.20 is also in the tree and is
-    # what the hyper-1.x client uses.
-    "RUSTSEC-2026-0258",
-
     # dotenv 0.15.0 -- unmaintained, no vulnerability. A direct dependency
     # of QRMI, not of this workspace: nothing in crates/ uses it, because
     # lsfq-core parses .env and env.qpu itself (see creds.rs). Removing it
@@ -64,39 +28,14 @@ ignore = [
 
     # ---------------------------------------------------------------------
     # See SECURITY-NOTES.md for the full reasoning.
-    #
-    # The modern-stack instances of RUSTSEC-2026-0346, -0349, -0381 and
-    # -0382 (live traffic to IBM Quantum Platform) were fixed by updating
-    # Cargo.lock, not ignored. See the entries below.
     # ---------------------------------------------------------------------
 
-    # ctutils 0.4.3 -- non-constant-time mask generation and u128
-    # comparison. crypto-bigint 0.5.5 -- timing variability in operations
-    # intended to be constant-time. Both are reachable only through the S3
-    # request-signing path:
-    #   ctutils       <- digest <- hmac/sha1/sha2/md-5 <- aws-smithy-checksums
+    # crypto-bigint 0.5.5 -- timing variability in operations intended to be
+    # constant-time. Reachable only through the S3 request-signing path:
     #   crypto-bigint <- elliptic-curve <- p256 <- ecdsa <- aws-sigv4
     # Nothing in crates/ calls the AWS SDK, so no S3 request is ever signed,
     # and a timing side channel needs repeated measurable operations.
-    "RUSTSEC-2026-0385",
-    "RUSTSEC-2026-0387",
-
-    # tokio 1.53.2 -- AsyncFd::new and related constructors violate I/O
-    # safety. Nothing in crates/ constructs an AsyncFd (`grep -rn AsyncFd
-    # crates/` is empty); the only runtime built here is elim-qpu's
-    # current-thread runtime, used to join two QRMI queries.
-    "RUSTSEC-2026-0386",
-
-    # --- Modern TLS stack fixed in Cargo.lock; legacy remainder and unmaintained crates ---
-    # The *modern* TLS stack was fixed by updating Cargo.lock to rustls
-    # 0.23.46, rustls-webpki 0.103.17, webpki-roots 1.0.12 and rustix 1.1.6,
-    # which clears RUSTSEC-2026-0381 and -0486 and the 0.23.x instances of
-    # -0346, -0349 and -0382. What remains is the legacy rustls 0.21.12 /
-    # rustls-webpki 0.101.7 stack (see the top of this list): rustls 0.21 has
-    # no patched release, and nothing in this workspace uses it for traffic.
-    "RUSTSEC-2026-0346", # rustls 0.21.12 only
-    "RUSTSEC-2026-0349", # rustls 0.21.12 only
-    "RUSTSEC-2026-0382", # rustls-webpki 0.101.7 only
+    "RUSTSEC-2026-0387", # crypto-bigint 0.5.5
 
     # Unmaintained / unsound, no fix available through QRMI.
     "RUSTSEC-2026-0543", # chrono 0.4.45 (unmaintained), via QRMI sub-crates
@@ -144,14 +83,6 @@ license-files = []
 
 [bans]
 multiple-versions = "warn"
-# The duplicate rustls stacks are the subject of the advisories above and
-# are expected until the upstream fix lands.
-skip = [
-    { crate = "rustls" },
-    { crate = "rustls-webpki" },
-    { crate = "hyper-rustls" },
-    { crate = "tokio-rustls" },
-]
 
 [sources]
 unknown-registry = "deny"
