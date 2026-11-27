@@ -8,6 +8,93 @@ Build on amd64 with Docker:
 
 Start with hostname lsfmaster. The image includes quantum_test. Supply credentials at runtime; configure resource mappings separately for ELIM.
 
+## Compose test cluster (Docker or Podman, x86_64 or arm64, multi-host)
+
+`compose.yaml` runs the image built from `Dockerfile` as a long-lived LSF
+cluster for testing the integration: the management host `lsfmaster` (it also
+runs jobs) plus up to four execution hosts, `compute01` to `compute04`. The
+wrapper picks the architecture, the container engine and the number of hosts.
+
+1. Put the LSF Community Edition archive in the **repository root** (the build
+   context), `lsfsce10.2.0.15-x86_64.tar.Z` or `lsfsce10.2.0.15-armv8.tar.Z`.
+   It must not be committed.
+2. Build and start, from anywhere:
+
+       ./virtualization/lsf-cluster.sh up -d --build --wait   # lsfmaster + 2 compute hosts
+       ./virtualization/lsf-cluster.sh shell                  # as lsfadmin on lsfmaster
+       ./virtualization/lsf-cluster.sh shell compute02        # ... or on another host
+       ./virtualization/lsf-cluster.sh down                   # `down -v` also drops the home volume
+
+   `--wait` returns once the master's health check passes, which needs every
+   host to be `ok` in `bhosts`. In the shell, `bhosts`, `lshosts` and
+   `bqueues` work, and the `quantum_test` queue exists. Check that jobs reach
+   the compute hosts with the `normal` queue (`quantum_test` wraps every job in
+   `jobstarter.qrmi`, which needs QRMI settings):
+
+       bsub -K -q normal -n 4 -R "span[ptile=2]" hostname   # two hosts, two slots each
+
+| Setting | Meaning | Default |
+| --- | --- | --- |
+| `LSF_COMPUTE_NODES` | compute hosts besides `lsfmaster`, 0 to 4 | 2 |
+| `LSF_TARGET_ARCH` | `x86_64` or `arm64`; the other one builds and runs under emulation | this machine |
+| `CONTAINER_ENGINE` | `podman` or `docker` | `podman` if installed |
+| `LSF_VERSION` | release in the archive name | `10.2.0.15` |
+| `QRMI_ENV_FILE` | host `.env` with QRMI credentials | none |
+
+| Host | Env file | LSF archive |
+| --- | --- | --- |
+| x86_64 / amd64 | `lsf-cluster.x86_64.env` | `lsfsce<ver>-x86_64.tar.Z` |
+| arm64 / Apple silicon | `lsf-cluster.arm64.env` | `lsfsce<ver>-armv8.tar.Z` |
+
+Without the wrapper, name the env file, one `--profile` per compute host, and
+give `LSF_NODES` the same hosts (every node must be told the full list):
+
+    LSF_NODES="compute01 compute02" podman compose \
+        --env-file virtualization/lsf-cluster.arm64.env \
+        --profile compute01 --profile compute02 \
+        -f virtualization/compose.yaml up -d --build
+
+**How the hosts form one cluster.** Every node runs the same image, which
+installs LSF for the single host `lsfmaster`. At start, each node's
+`compose-entrypoint.sh` adds the hosts in `LSF_NODES` to its own
+`lsf.cluster.<name>` (using the file's own column header, and doing nothing on a
+restart). The compute hosts then start their LIM, wait for the master, and start
+`res` and `sbatchd`. So the host count changes without rebuilding the image.
+Only `/home/lsfadmin` is shared between hosts (the `lsf_home` volume): job
+working directories and output are visible everywhere. LSF's own tree is per
+node, with identical configuration.
+
+**Credentials.** Point `QRMI_ENV_FILE` at a host `.env` (format below). The
+management host copies it to `/home/lsfadmin/.env` with mode 600, where
+`-a "qrmi(file=.env,...)"` looks; the esub forwards the values to the job, so the
+compute hosts need no copy. It is never part of the image.
+
+    QRMI_ENV_FILE=$HOME/qrmi.env ./virtualization/lsf-cluster.sh up -d
+
+**Examples.** `examples/` is mounted read-only at `/opt/lsf-quantum-examples` on
+every host.
+
+**Rootless Podman.** `lsadmin`/`badmin` start the daemons through `bctrld`,
+which refuses inside a user namespace. `compose-entrypoint.sh` detects that and
+starts `lim`, `res` and `sbatchd` directly.
+
+**Limits.**
+- The cluster has one management host. Failover would need master candidates
+  in `LSF_MASTER_LIST`, which `install.config` sets to `lsfmaster` alone.
+- The image does not yet contain `schmod_qrmi`. To test it, build it
+  (`scheduler-plugin/`), copy `schmod_qrmi.so` into `$LSF_LIBDIR` on
+  `lsfmaster`, add it to `lsb.modules` and run `badmin mbdrestart`.
+- Compute hosts may appear in `bhosts` with the network's DNS suffix (for
+  example `compute01.dns.podman`); the sibling `lsf-integration` cluster sees the
+  same and dispatches normally.
+- Validated so far: the compose file's syntax, profiles and variable
+  substitution (with `podman-compose`, arm64), the wrapper, the health check
+  expression, and the host-registration step against LSF's own `lsf.cluster`
+  template. Not run end to end: that needs the LSF archive. Multi-host
+  authentication relies on LSF's default `eauth` behaving the same on every
+  node, which is the first thing to check if `bhosts` shows a compute host
+  `unavail`.
+
 ## LSF-QRMI integration verification
 
 The LSF integration (`esub.qrmi`, `jobstarter.qrmi`, `elim.qpu`) is built

@@ -1,0 +1,22 @@
+# Read from the repository root: that is the build context for
+# virtualization/Dockerfile (the first stage compiles the Rust binaries), and
+# Docker and Podman only honour a .dockerignore at the context root. Without
+# it every build uploads target/, which is multi-gigabyte.
+#
+# Paths below are relative to the root.
+
+.git
+
+# Build artifacts: the image builds its own, and target/ is multi-gigabyte.
+target/
+
+# Credentials must never enter an image layer.
+**/.env
+**/.env.*
+**/env.qpu
+
+# Not needed by the build.
+**/__pycache__
+docs/
+examples/
+*.png

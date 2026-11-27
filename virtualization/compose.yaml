@@ -1,0 +1,155 @@
+# (C) Copyright 2025-2026 IBM. All Rights Reserved.
+#
+# This code is licensed under the Apache License, Version 2.0. You may
+# obtain a copy of this license in the LICENSE.txt file in the root directory
+# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+
+# Multi-host LSF test cluster for the LSF-QRMI integration (esub.qrmi,
+# jobstarter.qrmi, elim.qpu and, once installed, schmod_qrmi). Works with
+# Docker Compose and Podman Compose, on x86_64 and arm64.
+#
+#   lsfmaster                 management host (mbatchd, mbschd), also runs jobs
+#   compute01 .. compute04    execution hosts, started on request
+#
+# Use the wrapper, which picks the architecture and engine and starts the
+# number of compute hosts you ask for (default 2, 0 for a single host):
+#
+#     ./virtualization/lsf-cluster.sh up -d --build
+#     LSF_COMPUTE_NODES=4 ./virtualization/lsf-cluster.sh up -d
+#     ./virtualization/lsf-cluster.sh shell
+#     ./virtualization/lsf-cluster.sh down
+#
+# Calling compose directly, name the architecture's env file, the compute
+# hosts' profiles, and the same hosts in LSF_NODES (every node must be told
+# the full list; the wrapper does all this):
+#
+#     LSF_NODES="compute01 compute02" podman compose \
+#         --env-file virtualization/lsf-cluster.arm64.env \
+#         --profile compute01 --profile compute02 \
+#         -f virtualization/compose.yaml up -d --build
+#
+# Before the first build, put the LSF Community Edition archive in the
+# repository root (see README.md):
+#
+#     lsfsce10.2.0.15-x86_64.tar.Z   or   lsfsce10.2.0.15-armv8.tar.Z
+#
+# Variables (shell environment overrides the env file):
+#
+#     LSF_VERSION     LSF CE release in the archive name   (default 10.2.0.15)
+#     LSF_ARCH        x86_64 | armv8   -- set by the env file
+#     LSF_PLATFORM    linux/amd64 | linux/arm64 -- set by the env file
+#     LSF_INSTALLER   lsfinstall archive for that architecture -- env file
+#     LSF_NODES       compute host names in the cluster, space separated
+#     QRMI_ENV_FILE   host file with QRMI credentials, optional (below)
+#
+# How the hosts become one cluster: every node runs the same image, which
+# installs LSF for the single host `lsfmaster`. At start, each node's
+# compose-entrypoint.sh adds the compute hosts to its own lsf.cluster file,
+# so the node count changes without rebuilding. Only /home/lsfadmin is shared
+# (the lsf_home volume): job working directories and output are visible on
+# every host. LSF's own tree is per node, with identical configuration.
+
+x-lsf-node: &lsf-node
+  image: localhost/lsf-ce:${LSF_VERSION:-10.2.0.15}-${LSF_ARCH:-x86_64}
+  platform: ${LSF_PLATFORM:-linux/amd64}
+  init: true # reaps the daemons LSF forks
+  # The image's CMD is an interactive shell, which would exit at once here.
+  # compose-entrypoint.sh joins the node to the cluster and starts LSF, then
+  # runs this.
+  entrypoint: ["/bin/bash", "/usr/local/bin/compose-entrypoint.sh"]
+  command: ["sleep", "infinity"]
+  environment:
+    LSF_NODES: ${LSF_NODES:-}
+  volumes:
+    - ./compose-entrypoint.sh:/usr/local/bin/compose-entrypoint.sh:ro,z
+    - ../examples:/opt/lsf-quantum-examples:ro,z
+    # Job output and working directories, visible on every host.
+    - lsf_home:/home/lsfadmin
+  networks:
+    - lsfnet
+
+x-lsf-compute: &lsf-compute
+  <<: *lsf-node
+  # Built once, by lsfmaster. The compute hosts reuse the image.
+  pull_policy: never
+  environment:
+    NODE_ROLE: compute
+    LSF_NODES: ${LSF_NODES:-}
+  depends_on:
+    - lsfmaster
+  healthcheck:
+    test: ["CMD-SHELL", ". /opt/lsf/conf/profile.lsf && lsid >/dev/null 2>&1"]
+    interval: 10s
+    timeout: 15s
+    retries: 12
+    start_period: 30s
+
+services:
+  # The host name must be lsfmaster: it is baked into LSF_MASTER_LIST in
+  # install.config.
+  lsfmaster:
+    <<: *lsf-node
+    build:
+      # The Dockerfile's first stage compiles the Rust binaries, so the
+      # context is the repository root, not this directory.
+      context: ..
+      dockerfile: virtualization/Dockerfile
+      args:
+        LSFTARFILE: lsfsce${LSF_VERSION:-10.2.0.15}-${LSF_ARCH:-x86_64}.tar.Z
+        LSFDISTRO: lsfsce${LSF_VERSION:-10.2.0.15}-${LSF_ARCH:-x86_64}
+        LSFINSTALLER: ${LSF_INSTALLER:-lsf10.1_lsfinstall_linux_x86_64.tar.Z}
+    container_name: lsfmaster
+    hostname: lsfmaster
+    environment:
+      NODE_ROLE: master
+      LSF_NODES: ${LSF_NODES:-}
+    volumes:
+      - ./compose-entrypoint.sh:/usr/local/bin/compose-entrypoint.sh:ro,z
+      - ../examples:/opt/lsf-quantum-examples:ro,z
+      - lsf_home:/home/lsfadmin
+      # Optional QRMI credentials (a .env file; see README.md). The entrypoint
+      # copies it to /home/lsfadmin/.env with mode 600, so the job's
+      # `qrmi(file=.env,...)` finds it in its working directory. The default,
+      # /dev/null, means "none supplied".
+      - ${QRMI_ENV_FILE:-/dev/null}:/run/qrmi/env:ro,z
+    # Healthy once LSF answers and every host in LSF_NODES, plus this one, is
+    # "ok" in bhosts, so `up --wait` returns when the whole cluster is usable.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          . /opt/lsf/conf/profile.lsf && lsid >/dev/null 2>&1 &&
+          [ "$$(bhosts -w 2>/dev/null | awk 'NR>1 && $$2=="ok"' | wc -l)" -ge
+          "$$(set -- $$LSF_NODES; echo $$(( $$# + 1 )))" ]
+      interval: 10s
+      timeout: 15s
+      retries: 18
+      start_period: 40s
+
+  compute01:
+    <<: *lsf-compute
+    container_name: compute01
+    hostname: compute01
+    profiles: [compute01]
+  compute02:
+    <<: *lsf-compute
+    container_name: compute02
+    hostname: compute02
+    profiles: [compute02]
+  compute03:
+    <<: *lsf-compute
+    container_name: compute03
+    hostname: compute03
+    profiles: [compute03]
+  compute04:
+    <<: *lsf-compute
+    container_name: compute04
+    hostname: compute04
+    profiles: [compute04]
+
+volumes:
+  lsf_home:
+
+networks:
+  lsfnet:
+    driver: bridge
