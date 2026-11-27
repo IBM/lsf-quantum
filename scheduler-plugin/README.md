@@ -7,6 +7,8 @@ queried QRMI at launch) and into the scheduler, using the load indices
 
 ## How a job flows
 
+![LSF job submission](LSF-QRMI-scheduler.svg) 
+
 ```
 bsub -a "qrmi(file=.env,qpu.qubits=128,selector=priority)" app
   esub.qrmi   -> credentials into the job env      (as before)

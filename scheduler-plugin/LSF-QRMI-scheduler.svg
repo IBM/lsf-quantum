@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1333.3" height="750" viewBox="0 0 1333.3 750">
+<title>QRMI workloads with LSF: scheduler-side QPU selection (schmod_qrmi)</title>
+<defs>
+<marker id="an" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" markerUnits="strokeWidth" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#111827"/></marker>
+<marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" markerUnits="strokeWidth" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9CA3AF"/></marker>
+<marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" markerUnits="strokeWidth" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#0F62FE"/></marker>
+</defs>
+<rect width="1333.3" height="750" fill="#FFFFFF"/>
+<text x="38" y="74" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="44.4" fill="#111827" font-weight="bold">QRMI workloads with LSF</tspan></text>
+<text x="38" y="112" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="18.1" fill="#6B7280">Submission, scheduler-side QPU selection (schmod_qrmi), and quantum-service execution</tspan></text>
+<g id="stages">
+<circle cx="53" cy="160" r="18" fill="#111827"/>
+<text x="53" y="165" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="16.7" fill="#FFFFFF" font-weight="bold">1</tspan></text>
+<text x="80" y="166" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="19.4" fill="#111827" font-weight="bold">Submit &amp; configure</tspan></text>
+<line x1="35" y1="186" x2="460" y2="186" stroke="#D1D5DB" stroke-width="1.5"/>
+<circle cx="498" cy="160" r="18" fill="#111827"/>
+<text x="498" y="165" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="16.7" fill="#FFFFFF" font-weight="bold">2</tspan></text>
+<text x="525" y="166" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="19.4" fill="#111827" font-weight="bold">Schedule &amp; select QPU</tspan></text>
+<line x1="480" y1="186" x2="860" y2="186" stroke="#D1D5DB" stroke-width="1.5"/>
+<circle cx="893" cy="160" r="18" fill="#111827"/>
+<text x="893" y="165" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="16.7" fill="#FFFFFF" font-weight="bold">3</tspan></text>
+<text x="920" y="166" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="19.4" fill="#111827" font-weight="bold">Launch &amp; execute</tspan></text>
+<line x1="875" y1="186" x2="1295" y2="186" stroke="#D1D5DB" stroke-width="1.5"/>
+</g>
+<g id="control-flow">
+<circle cx="55" cy="245" r="17" fill="none" stroke="#111827" stroke-width="2"/>
+<path d="M 66 259 Q 82 263 80 282" fill="none" stroke="#111827" stroke-width="2"/>
+<text x="55" y="316" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#6B7280">User</tspan></text>
+<rect id="bsub" x="95" y="215" width="190" height="80" rx="8" fill="#F3F4F6" stroke="#D1D5DB" stroke-width="1.25"/>
+<text x="190" y="251.9" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#111827" font-weight="bold">bsub -a </tspan><tspan font-size="13.9" fill="#6B7280">“qrmi(file=.env,</tspan></text>
+<text x="190" y="269.3" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#6B7280">qpu.qubits=156,…)”</tspan></text>
+<rect id="esub" x="315" y="215" width="130" height="80" rx="8" fill="#F3F4F6" stroke="#6B7280" stroke-width="2"/>
+<text x="380" y="262.9" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="19.4" fill="#111827" font-weight="bold">esub.qrmi</tspan></text>
+<rect id="mbatchd" x="495" y="215" width="130" height="80" rx="8" fill="#FFFFFF" stroke="#111827" stroke-width="2"/>
+<text x="560" y="263.4" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="20.8" fill="#111827" font-weight="bold">mbatchd</tspan></text>
+<rect id="sbatchd" x="705" y="215" width="130" height="80" rx="8" fill="#FFFFFF" stroke="#111827" stroke-width="2"/>
+<text x="770" y="263.4" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="20.8" fill="#111827" font-weight="bold">sbatchd</tspan></text>
+<rect id="jobstarter" x="885" y="215" width="160" height="80" rx="8" fill="#F3F4F6" stroke="#6B7280" stroke-width="2"/>
+<text x="965" y="261.8" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="16.7" fill="#111827" font-weight="bold">jobstarter.qrmi</tspan></text>
+<rect id="ibm" x="1145" y="215" width="150" height="80" rx="8" fill="#FFFFFF" stroke="#111827" stroke-width="2"/>
+<text x="1220" y="243.5" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="16.7" fill="#111827" font-weight="bold">IBM Quantum</tspan></text>
+<text x="1220" y="264.4" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="16.7" fill="#111827" font-weight="bold">Platform</tspan></text>
+<text x="1220" y="280.9" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="12.5" fill="#6B7280">QCS endpoint</tspan></text>
+<line x1="75" y1="255" x2="95" y2="255" stroke="#111827" stroke-width="2.0" marker-end="url(#an)"/>
+<line x1="285" y1="255" x2="315" y2="255" stroke="#111827" stroke-width="2.0" marker-end="url(#an)"/>
+<line x1="445" y1="255" x2="495" y2="255" stroke="#111827" stroke-width="2.0" marker-end="url(#an)"/>
+<line x1="625" y1="255" x2="705" y2="255" stroke="#111827" stroke-width="2.0" marker-end="url(#an)"/>
+<line x1="835" y1="255" x2="885" y2="255" stroke="#111827" stroke-width="2.0" marker-end="url(#an)"/>
+<line x1="1045" y1="255" x2="1145" y2="255" stroke="#111827" stroke-width="2.0" marker-end="url(#an)"/>
+<text x="1095" y="240" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="12.5" fill="#6B7280">acquire QPU</tspan></text>
+</g>
+<g id="scheduler-selection">
+<rect id="schmod" x="470" y="355" width="280" height="90" rx="8" fill="#EDF5FF" stroke="#0F62FE" stroke-width="2.25"/>
+<text x="610" y="386.5" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="18.1" fill="#111827" font-weight="bold">mbschd</tspan></text>
+<text x="610" y="411.9" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="20.8" fill="#0F62FE" font-weight="bold">schmod_qrmi.so</tspan></text>
+<text x="610" y="429.4" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="12.5" fill="#6B7280">scheduler plug-in (new)</tspan></text>
+<rect id="elim" x="790" y="355" width="150" height="90" rx="8" fill="#F3F4F6" stroke="#6B7280" stroke-width="1.5"/>
+<text x="865" y="399.5" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="18.1" fill="#111827" font-weight="bold">elim.qpu</tspan></text>
+<text x="865" y="416.3" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="12.5" fill="#6B7280">QPU load indices</tspan></text>
+<line x1="545" y1="295" x2="545" y2="355" stroke="#0F62FE" stroke-width="2.25" marker-end="url(#ab)"/>
+<line x1="575" y1="355" x2="575" y2="295" stroke="#0F62FE" stroke-width="2.25" marker-end="url(#ab)"/>
+<line x1="790" y1="400" x2="750" y2="400" stroke="#0F62FE" stroke-width="2.0" marker-end="url(#ab)"/>
+<text x="595" y="316" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="12.5" fill="#0F62FE" font-weight="bold" font-family="'Courier New', 'DejaVu Sans Mono', monospace">extsched_modifyJob</tspan></text>
+<text x="595" y="330" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="12.5" fill="#0F62FE" font-family="'Courier New', 'DejaVu Sans Mono', monospace">adds rusage[qrmi_&lt;qpu&gt;=1]</tspan></text>
+</g>
+<g id="launch">
+<rect id="workload" x="1145" y="355" width="150" height="90" rx="8" fill="#111827" stroke="#111827" stroke-width="2"/>
+<text x="1220" y="395.7" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="19.4" fill="#FFFFFF" font-weight="bold">workload</tspan></text>
+<text x="1220" y="420.0" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="19.4" fill="#FFFFFF" font-weight="bold">QRMI</tspan></text>
+<line x1="1030" y1="295" x2="1030" y2="400" stroke="#9CA3AF" stroke-width="2.0" stroke-dasharray="9 6"/>
+<line x1="1030" y1="400" x2="1145" y2="400" stroke="#9CA3AF" stroke-width="2.0" stroke-dasharray="9 6" marker-end="url(#ag)"/>
+<line x1="1220" y1="355" x2="1220" y2="295" stroke="#111827" stroke-width="2.5" marker-end="url(#an)"/>
+<text x="1215" y="326" text-anchor="end" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="12.5" fill="#6B7280">quantum circuit</tspan></text>
+<text x="1215" y="340" text-anchor="end" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="12.5" fill="#6B7280">execution</tspan></text>
+</g>
+<rect id="panel-submission" x="35" y="485" width="400" height="185" rx="4" fill="#FAFAFA" stroke="#D1D5DB" stroke-width="1.25"/>
+<text x="50" y="514" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="16.7" fill="#111827" font-weight="bold">Submission environment</tspan></text>
+<text x="50" y="534" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#6B7280" font-weight="bold" font-family="'Courier New', 'DejaVu Sans Mono', monospace">$CWD/.env</tspan></text>
+<text x="50" y="551" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="11.8" fill="#111827" font-family="'Courier New', 'DejaVu Sans Mono', monospace">QRMI_IBM_QCS_IAM_APIKEY</tspan></text>
+<text x="50" y="565" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="11.8" fill="#111827" font-family="'Courier New', 'DejaVu Sans Mono', monospace">QRMI_IBM_QCS_SERVICE_CRN</tspan></text>
+<text x="50" y="579" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="11.8" fill="#111827" font-family="'Courier New', 'DejaVu Sans Mono', monospace">QRMI_IBM_QCS_{ENDPOINT,IAM_ENDPOINT,SESSION_MODE}</tspan></text>
+<text x="50" y="616" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#0F62FE" font-weight="bold">Request for the scheduler (new)</tspan></text>
+<text x="50" y="631" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="11.8" fill="#0F62FE" font-family="'Courier New', 'DejaVu Sans Mono', monospace">-extsched "QRMI[selector=priority|</tspan></text>
+<text x="50" y="645" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="11.8" fill="#0F62FE" font-family="'Courier New', 'DejaVu Sans Mono', monospace">   qpu=qubits=156]"</tspan></text>
+<rect id="panel-selection" x="450" y="485" width="405" height="185" rx="4" fill="#EDF5FF" stroke="#0F62FE" stroke-width="1.75"/>
+<text x="465" y="514" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="16.7" fill="#111827" font-weight="bold">QPU selection in schmod_qrmi</tspan></text>
+<text x="465" y="540" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#0F62FE" font-weight="bold">1</tspan></text>
+<text x="483" y="540" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#111827">Snapshot load indices: </tspan><tspan font-size="12.5" fill="#0F62FE" font-family="'Courier New', 'DejaVu Sans Mono', monospace">qubits, pending_jobs, …</tspan></text>
+<text x="465" y="560" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#0F62FE" font-weight="bold">2</tspan></text>
+<text x="483" y="560" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#111827">Apply policy: </tspan><tspan font-size="12.5" fill="#0F62FE" font-family="'Courier New', 'DejaVu Sans Mono', monospace">basic | health | priority</tspan></text>
+<text x="465" y="580" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#0F62FE" font-weight="bold">3</tspan></text>
+<text x="483" y="580" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#111827">Tag the job: </tspan><tspan font-size="12.5" fill="#0F62FE" font-family="'Courier New', 'DejaVu Sans Mono', monospace">rusage[qrmi_ibm_kingston=1]</tspan></text>
+<text x="465" y="600" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#0F62FE" font-weight="bold">4</tspan></text>
+<text x="483" y="600" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#111827">Hold one cycle; release once tagged</tspan></text>
+<text x="465" y="626" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="12.5" fill="#6B7280" font-style="italic">device=&lt;name&gt; jobs are tagged too, without consulting metrics.</tspan></text>
+<rect id="panel-launch" x="870" y="485" width="425" height="185" rx="4" fill="#FAFAFA" stroke="#D1D5DB" stroke-width="1.25"/>
+<text x="885" y="514" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="16.7" fill="#111827" font-weight="bold">Environment propagation at launch</tspan></text>
+<text x="885" y="540" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#111827" font-weight="bold">1</tspan></text>
+<text x="903" y="540" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#111827">Read the QPU tag: </tspan><tspan font-size="12.5" fill="#111827" font-family="'Courier New', 'DejaVu Sans Mono', monospace">bjobs -o effective_resreq</tspan></text>
+<text x="885" y="560" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#111827" font-weight="bold">2</tspan></text>
+<text x="903" y="560" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#111827">Bind alias: </tspan><tspan font-size="12.5" fill="#111827" font-family="'Courier New', 'DejaVu Sans Mono', monospace">QRMI_IBM_QCS_*</tspan></text>
+<text x="903" y="580" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#6B7280">→ </tspan><tspan font-size="12.5" fill="#111827" font-family="'Courier New', 'DejaVu Sans Mono', monospace">ibm_kingston_QRMI_IBM_QCS_*</tspan></text>
+<text x="885" y="600" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#111827" font-weight="bold">3</tspan></text>
+<text x="903" y="600" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#111827">Acquire the QPU, record it with </tspan><tspan font-size="12.5" fill="#111827" font-family="'Courier New', 'DejaVu Sans Mono', monospace">bpost</tspan><tspan font-size="13.9" fill="#111827">, run</tspan></text>
+<text x="885" y="628" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="12.5" fill="#6B7280" font-style="italic">No QRMI enumeration or metric queries at launch.</tspan></text>
+<line x1="380" y1="295" x2="380" y2="485" stroke="#9CA3AF" stroke-width="2.0" stroke-dasharray="9 6" marker-end="url(#ag)"/>
+<line x1="610" y1="445" x2="610" y2="485" stroke="#0F62FE" stroke-width="2.0" marker-end="url(#ab)"/>
+<line x1="990" y1="295" x2="990" y2="485" stroke="#9CA3AF" stroke-width="2.0" stroke-dasharray="9 6" marker-end="url(#ag)"/>
+<g id="legend">
+<line x1="40" y1="697" x2="95" y2="697" stroke="#111827" stroke-width="2.0" marker-end="url(#an)"/>
+<text x="100" y="701" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#6B7280">Control / execution flow</tspan></text>
+<line x1="360" y1="697" x2="415" y2="697" stroke="#9CA3AF" stroke-width="2.0" stroke-dasharray="9 6" marker-end="url(#ag)"/>
+<text x="420" y="701" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#6B7280">Environment propagation</tspan></text>
+<line x1="655" y1="697" x2="710" y2="697" stroke="#0F62FE" stroke-width="2.0" marker-end="url(#ab)"/>
+<text x="715" y="701" text-anchor="start" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.9" fill="#0F62FE">QPU selection (new)</tspan></text>
+<text x="1295" y="691" text-anchor="end" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.2" fill="#111827" font-style="italic">The scheduler picks the QPU once and records it on the job;</tspan></text>
+<text x="1295" y="706" text-anchor="end" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" xml:space="preserve"><tspan font-size="13.2" fill="#111827" font-style="italic">the jobstarter no longer queries QRMI to choose.</tspan></text>
+</g>
+</svg>
