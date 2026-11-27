@@ -29,3 +29,9 @@ lsf*.tar.Z
 
 # macOS
 .DS_Store
+
+# schmod_qrmi build outputs
+scheduler-plugin/*.o
+scheduler-plugin/*.so
+scheduler-plugin/test/harness
+scheduler-plugin/test/*.dSYM/

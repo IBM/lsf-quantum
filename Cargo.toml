@@ -8,6 +8,7 @@
 resolver = "2"
 members = [
     "crates/qpu-select",
+    "crates/qpu-select-ffi",
     "crates/lsfq-core",
     "crates/elim-qpu",
     "crates/jobstarter-qrmi",

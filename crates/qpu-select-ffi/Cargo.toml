@@ -1,0 +1,32 @@
+# (C) Copyright 2025-2026 IBM. All Rights Reserved.
+#
+# This code is licensed under the Apache License, Version 2.0. You may
+# obtain a copy of this license in the LICENSE.txt file in the root directory
+# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+
+[package]
+name = "qpu-select-ffi"
+description = "C ABI over qpu-select, linked into the LSF scheduler plug-in"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+# staticlib: linked into schmod_qrmi.so so the plug-in is one file.
+# rlib: so the unit tests below can run under `cargo test`.
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+qpu-select = { path = "../qpu-select" }
+
+# The one crate in this workspace allowed `unsafe`: a C ABI cannot be written
+# without it. Everything unsafe is confined to src/lib.rs and documented.
+[lints.rust]
+missing_docs = "warn"
+unsafe_code = "allow"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }

@@ -14,9 +14,12 @@
 //!   `$LSB_SUB_MODIFY_FILE`;
 //! * [`bpost`] — posting the QRMI acquisition ID to the job record;
 //! * [`elim`] — the load-index line format;
-//! * [`hostres`] — mapping an ELIM host to the QPU it serves.
+//! * [`hostres`] — mapping an ELIM host to the QPU it serves;
+//! * [`tag`] — the QPU the scheduler plug-in assigned, and the `-extsched`
+//!   request the esub hands to it.
 
 pub mod bpost;
 pub mod elim;
 pub mod esub;
 pub mod hostres;
+pub mod tag;

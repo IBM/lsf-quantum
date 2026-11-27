@@ -171,6 +171,63 @@ impl EnvVarDirective {
     }
 }
 
+/// Append a single `KEY="value"` assignment to `$LSB_SUB_MODIFY_FILE`.
+///
+/// For the submission parameters an esub may rewrite directly, such as
+/// `LSB_SUB_EXTSCHED_PARAM`, as opposed to the environment-variable list that
+/// [`EnvVarDirective`] builds.
+///
+/// # Errors
+///
+/// Returns [`EsubError::NoModifyFile`] outside an esub,
+/// [`EsubError::UnsafeValue`] if the value contains a double quote or a
+/// newline, or [`EsubError::Write`] if the file cannot be appended to.
+pub fn append_assignment(key: &str, value: &str) -> Result<PathBuf, EsubError> {
+    let path = env::var_os("LSB_SUB_MODIFY_FILE")
+        .map(PathBuf::from)
+        .ok_or(EsubError::NoModifyFile)?;
+
+    append_assignment_to(&path, key, value)?;
+    Ok(path)
+}
+
+/// As [`append_assignment`], to a specific path.
+///
+/// # Errors
+///
+/// As [`append_assignment`], minus the missing-variable case.
+pub fn append_assignment_to(
+    path: impl AsRef<Path>,
+    key: &str,
+    value: &str,
+) -> Result<(), EsubError> {
+    let path = path.as_ref();
+
+    if let Some(character) = value
+        .chars()
+        .find(|character| matches!(character, '"' | '\n' | '\r'))
+    {
+        return Err(EsubError::UnsafeValue {
+            key: key.to_owned(),
+            character,
+        });
+    }
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|source| EsubError::Write {
+            path: path.to_path_buf(),
+            source,
+        })?;
+
+    writeln!(file, "{key}=\"{value}\"").map_err(|source| EsubError::Write {
+        path: path.to_path_buf(),
+        source,
+    })
+}
+
 /// Writing the `esub` directive failed.
 #[derive(Debug)]
 pub enum EsubError {
@@ -352,5 +409,33 @@ mod tests {
             !path.exists(),
             "a rejected directive must not create the file"
         );
+    }
+
+    #[test]
+    fn assignment_is_written_quoted_on_its_own_line() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("modify");
+
+        let mut directive = EnvVarDirective::new();
+        directive.set("A", "1");
+        directive.append_to(&path).expect("appends");
+        append_assignment_to(&path, "LSB_SUB_EXTSCHED_PARAM", "QRMI[selector=basic]")
+            .expect("appends");
+
+        let contents = std::fs::read_to_string(&path).expect("read");
+        let lines: Vec<&str> = contents.lines().collect();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[1], "LSB_SUB_EXTSCHED_PARAM=\"QRMI[selector=basic]\"");
+    }
+
+    #[test]
+    fn assignment_rejects_a_quote_or_newline_before_touching_the_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("modify");
+
+        for bad in ["a\"b", "a\nb"] {
+            assert!(append_assignment_to(&path, "K", bad).is_err());
+        }
+        assert!(!path.exists());
     }
 }

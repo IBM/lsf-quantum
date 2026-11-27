@@ -2127,6 +2127,13 @@ name = "qpu-select"
 version = "0.1.0"
 
 [[package]]
+name = "qpu-select-ffi"
+version = "0.1.0"
+dependencies = [
+ "qpu-select",
+]
+
+[[package]]
 name = "qrmi"
 version = "0.27.1"
 source = "git+https://github.com/qiskit-community/qrmi?tag=0.27.1#b0e3dab96a8035837b4c9428c7288b3e8135bde9"

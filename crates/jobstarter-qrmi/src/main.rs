@@ -39,6 +39,7 @@ mod launch;
 use std::process::ExitCode;
 
 use lsfq_core::lsf::bpost::{self, AcquisitionMessage, JobReference};
+use lsfq_core::lsf::tag;
 use lsfq_core::qrmi::lease::Lease;
 use lsfq_core::qrmi::provider;
 use lsfq_core::qrmi::qrmi_crate::{models::ResourceType, QuantumResource};
@@ -107,9 +108,10 @@ async fn run(diagnostics: &Diagnostics) -> Result<Outcome, String> {
             diagnostics.debug_with("Requested device:", device);
             device.clone()
         }
-        Plan::Select { selector, request } => {
-            select_device(diagnostics, &config, selector, request).await?
-        }
+        Plan::Select { selector, request } => match scheduler_assignment(diagnostics)? {
+            Some(device) => device,
+            None => select_device(diagnostics, &config, selector, request).await?,
+        },
     };
 
     // Re-key the provider settings to the selected device: QRMI resolves a
@@ -179,6 +181,43 @@ async fn run(diagnostics: &Diagnostics) -> Result<Outcome, String> {
     std::env::remove_var(&token_var);
 
     outcome
+}
+
+/// The QPU the scheduler plug-in (`schmod_qrmi`) assigned to this job.
+///
+/// `Ok(None)` means the job carries no assignment -- the plug-in is not
+/// installed, or the job predates it -- and the jobstarter selects for itself
+/// as it always has. Setting `LSF_QRMI_SELECTION=scheduler` makes that an
+/// error instead, for sites where the plug-in's policy must not be bypassed.
+fn scheduler_assignment(diagnostics: &Diagnostics) -> Result<Option<String>, String> {
+    let strict = std::env::var("LSF_QRMI_SELECTION").is_ok_and(|value| value.trim() == "scheduler");
+
+    let outcome = JobReference::from_env()
+        .map_err(|error| error.to_string())
+        .and_then(|reference| tag::read(&reference).map_err(|error| error.to_string()));
+
+    match outcome {
+        Ok(Some(device)) => {
+            diagnostics.debug_with("QPU assigned by the scheduler:", &device);
+            Ok(Some(device))
+        }
+        Ok(None) if strict => {
+            Err("LSF_QRMI_SELECTION=scheduler, but the job has no QPU assignment".to_owned())
+        }
+        Err(error) if strict => Err(format!(
+            "cannot read the scheduler's QPU assignment: {error}"
+        )),
+        Ok(None) => {
+            diagnostics.debug("No QPU assigned by the scheduler; selecting locally");
+            Ok(None)
+        }
+        Err(error) => {
+            diagnostics.warn(&format!(
+                "Cannot read the scheduler's QPU assignment ({error}); selecting locally"
+            ));
+            Ok(None)
+        }
+    }
 }
 
 /// Enumerate backends and apply the requested policy.

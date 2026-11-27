@@ -31,7 +31,8 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use lsfq_core::lsf::esub::EnvVarDirective;
+use lsfq_core::lsf::esub::{append_assignment, EnvVarDirective};
+use lsfq_core::lsf::tag::extsched_request;
 use lsfq_core::{esub_vars, Credentials, Diagnostics, Program};
 
 fn main() -> ExitCode {
@@ -134,6 +135,14 @@ fn run(diagnostics: &Diagnostics, arguments: &[String]) -> Result<(), String> {
     let rendered = directive.render().map_err(|error| error.to_string())?;
     diagnostics.debug_with("lsf_var:", &rendered);
 
+    // The same request, for the scheduler plug-in (schmod_qrmi). Built before
+    // anything is written, so a value it cannot carry rejects the submission
+    // cleanly rather than leaving a half-written modify file.
+    let extsched = scheduler_request(
+        &request,
+        std::env::var("LSB_SUB_EXTSCHED_PARAM").ok().as_deref(),
+    )?;
+
     let written = directive
         .append_to_modify_file()
         .map_err(|error| error.to_string())?;
@@ -143,7 +152,39 @@ fn run(diagnostics: &Diagnostics, arguments: &[String]) -> Result<(), String> {
         &written.display(),
     );
 
+    if let Some(param) = extsched {
+        append_assignment("LSB_SUB_EXTSCHED_PARAM", &param).map_err(|error| error.to_string())?;
+        diagnostics.debug_with("Passed the request to the scheduler plug-in:", &param);
+    }
+
     Ok(())
+}
+
+/// The `LSB_SUB_EXTSCHED_PARAM` value that carries the request to
+/// `schmod_qrmi`, or `None` if the user already supplied a `QRMI[...]`
+/// themselves.
+///
+/// Anything the user passed with `bsub -extsched` is kept, with the request
+/// appended after a `;`. Without the plug-in installed the string is simply
+/// stored on the job and ignored, so this is safe to send unconditionally.
+fn scheduler_request(
+    request: &args::Request,
+    existing: Option<&str>,
+) -> Result<Option<String>, String> {
+    let existing = existing.map(str::trim).filter(|value| !value.is_empty());
+
+    if existing.is_some_and(|value| value.contains("QRMI[")) {
+        return Ok(None);
+    }
+
+    let qpu = request.qpu.as_ref().map(args::QpuAttributes::to_lsf_string);
+    let ours = extsched_request(&request.selector, request.device.as_deref(), qpu.as_deref())
+        .map_err(|error| error.to_string())?;
+
+    Ok(Some(match existing {
+        Some(value) => format!("{value};{ours}"),
+        None => ours,
+    }))
 }
 
 /// Resolve the credentials path.
@@ -243,6 +284,44 @@ mod tests {
     fn an_absolute_path_is_used_as_given() {
         let resolved = resolve_credentials_path(Path::new("/etc/qrmi/.env"));
         assert_eq!(resolved, PathBuf::from("/etc/qrmi/.env"));
+    }
+
+    fn parsed(arguments: &[&str]) -> args::Request {
+        args::parse(arguments.iter().copied()).expect("valid")
+    }
+
+    #[test]
+    fn the_request_is_handed_to_the_scheduler_plugin() {
+        let request = parsed(&["file=.env", "qpu.qubits=128", "selector=priority"]);
+        assert_eq!(
+            scheduler_request(&request, None).expect("builds"),
+            Some("QRMI[selector=priority|qpu=qubits=128]".to_owned())
+        );
+
+        let explicit = parsed(&["file=.env", "device=ibm_fez"]);
+        assert_eq!(
+            scheduler_request(&explicit, None).expect("builds"),
+            Some("QRMI[selector=basic|device=ibm_fez]".to_owned())
+        );
+    }
+
+    #[test]
+    fn a_users_own_extsched_is_kept() {
+        let request = parsed(&["file=.env", "qpu.qubits=1"]);
+        assert_eq!(
+            scheduler_request(&request, Some(" OTHER[x=1] ")).expect("builds"),
+            Some("OTHER[x=1];QRMI[selector=basic|qpu=qubits=1]".to_owned())
+        );
+    }
+
+    #[test]
+    fn a_users_own_qrmi_extsched_wins() {
+        let request = parsed(&["file=.env", "qpu.qubits=1"]);
+        assert_eq!(
+            scheduler_request(&request, Some("QRMI[selector=health|qpu=qubits=9]"))
+                .expect("builds"),
+            None
+        );
     }
 
     #[test]
